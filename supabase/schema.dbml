@@ -1,0 +1,142 @@
+// RachaScore — schema (dbdiagram.io)
+// profiles.id referencia auth.users(id), gerenciado pelo Supabase Auth (não modelado aqui)
+
+Table profiles {
+  id uuid [pk]
+  nome text [not null]
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table grupos {
+  id uuid [pk, default: `gen_random_uuid()`]
+  nome text [not null]
+  dono_id uuid [not null]
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table jogadores {
+  id uuid [pk, default: `gen_random_uuid()`]
+  nome text [not null]
+  user_id uuid [note: 'opcional - jogador pode não ter conta']
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table membros_grupo {
+  grupo_id uuid [not null]
+  jogador_id uuid [not null]
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (grupo_id, jogador_id) [pk]
+  }
+}
+
+Table rachas {
+  id uuid [pk, default: `gen_random_uuid()`]
+  grupo_id uuid [not null]
+  modalidade modalidade_enum [not null]
+  modo modo_enum [not null]
+  tamanho_equipe int [not null]
+  config jsonb [not null, default: `'{}'`, note: 'regras de fim de partida, específicas por modalidade']
+  data_hora timestamptz [not null]
+  local text
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table times {
+  id uuid [pk, default: `gen_random_uuid()`]
+  racha_id uuid [not null]
+  nome text [not null]
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table presencas_racha {
+  racha_id uuid [not null]
+  jogador_id uuid [not null]
+  presente boolean [not null, default: true]
+  time_id uuid [note: 'time sorteado pro jogador naquele racha']
+
+  indexes {
+    (racha_id, jogador_id) [pk]
+  }
+}
+
+Table partidas {
+  id uuid [pk, default: `gen_random_uuid()`]
+  racha_id uuid [not null]
+  time_a_id uuid [not null]
+  time_b_id uuid [not null]
+  status status_enum [not null, default: 'agendada']
+  placar_a int [not null, default: 0]
+  placar_b int [not null, default: 0]
+  vencedor_id uuid [note: 'null = empate (só futebol)']
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table sets {
+  id uuid [pk, default: `gen_random_uuid()`]
+  partida_id uuid [not null]
+  numero int [not null]
+  placar_a int [not null, default: 0]
+  placar_b int [not null, default: 0]
+  vencedor_id uuid
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (partida_id, numero) [unique]
+  }
+}
+
+Table eventos_ponto {
+  id uuid [pk, default: `gen_random_uuid()`]
+  partida_id uuid [not null]
+  set_id uuid [note: 'só vôlei']
+  time_id uuid [not null, note: 'time que ganhou o ponto']
+  jogador_id uuid [note: 'opcional - nem todo ponto tem autor (ex: erro adversário)']
+  motivo motivo_enum
+  created_at timestamptz [not null, default: `now()`]
+}
+
+enum modalidade_enum {
+  futebol
+  volei
+}
+
+enum modo_enum {
+  torneio
+  rapido
+}
+
+enum status_enum {
+  agendada
+  em_andamento
+  finalizada
+}
+
+enum motivo_enum {
+  ataque
+  bloqueio
+  saque
+  erro_adversario
+  outro
+}
+
+Ref: grupos.dono_id > profiles.id
+Ref: jogadores.user_id > profiles.id
+Ref: membros_grupo.grupo_id > grupos.id
+Ref: membros_grupo.jogador_id > jogadores.id
+Ref: rachas.grupo_id > grupos.id
+Ref: times.racha_id > rachas.id
+Ref: presencas_racha.racha_id > rachas.id
+Ref: presencas_racha.jogador_id > jogadores.id
+Ref: presencas_racha.time_id > times.id
+Ref: partidas.racha_id > rachas.id
+Ref: partidas.time_a_id > times.id
+Ref: partidas.time_b_id > times.id
+Ref: partidas.vencedor_id > times.id
+Ref: sets.partida_id > partidas.id
+Ref: sets.vencedor_id > times.id
+Ref: eventos_ponto.partida_id > partidas.id
+Ref: eventos_ponto.set_id > sets.id
+Ref: eventos_ponto.time_id > times.id
+Ref: eventos_ponto.jogador_id > jogadores.id

@@ -151,3 +151,9 @@ alter table presencas_racha enable row level security;
 alter table partidas enable row level security;
 alter table sets enable row level security;
 alter table eventos_ponto enable row level security;
+
+-- Tabelas criadas via SQL Editor não ganham GRANT automático pros roles do PostgREST
+-- (diferente de tabelas criadas pelo Table Editor). RLS restringe linhas, mas sem
+-- esse GRANT o acesso é negado por completo antes mesmo da RLS entrar em jogo.
+grant usage on schema public to authenticated;
+grant select, insert, update, delete on all tables in schema public to authenticated;

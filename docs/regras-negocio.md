@@ -17,8 +17,8 @@ Cada racha (evento) é criado dentro de um grupo e define:
   - `Torneio` — várias partidas no mesmo racha, com tabela de classificação
   - `Rápido` — uma partida avulsa, sem tabela
 - **Critério de fim de partida** (configurável na criação do racha):
-  - Futebol: por tempo cronometrado (ex.: 2x10min) **ou** por gols-alvo (primeiro time a atingir N gols vence)
-  - Vôlei: número de sets (1, melhor-de-3, melhor-de-5) + pontos por set (configurável, ex.: 25, com set decisivo em 15)
+  - Futebol: por tempo cronometrado e/ou por gols-alvo. Pode combinar os dois (ex.: 10min **ou** 2 gols) — a partida termina no critério que for atingido primeiro
+  - Vôlei: número de sets (1, melhor-de-3, melhor-de-5) + pontos por set (configurável, ex.: 25 — todos os sets valem o mesmo, sem set decisivo reduzido)
 
 ## 3. Grupo e Jogadores
 

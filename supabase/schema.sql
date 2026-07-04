@@ -45,11 +45,12 @@ create table rachas (
   modo text not null check (modo in ('torneio', 'rapido')),
   tamanho_equipe int not null check (tamanho_equipe > 0),
   -- config flexível por modalidade:
-  -- futebol: {"fim_tipo": "tempo", "minutos": 10} ou {"fim_tipo": "gols_alvo", "gols": 5}
-  -- volei:   {"num_sets": 3, "pontos_set": 25, "pontos_set_decisivo": 15}
+  -- futebol: {"minutos": 10, "gols": 5} — ao menos um; com os dois, vale o que bater primeiro
+  -- volei:   {"num_sets": 3, "pontos_set": 25}
   config jsonb not null default '{}',
   data_hora timestamptz not null,
   local text,
+  limite_jogadores int, -- null = sem limite; acima disso, presença entra em lista de espera
   created_at timestamptz not null default now()
 );
 
@@ -65,8 +66,9 @@ create table times (
 create table presencas_racha (
   racha_id uuid not null references rachas(id) on delete cascade,
   jogador_id uuid not null references jogadores(id) on delete cascade,
-  presente boolean not null default true,
+  status text not null default 'confirmado' check (status in ('confirmado', 'espera', 'ausente')),
   time_id uuid references times(id),
+  created_at timestamptz not null default now(), -- ordem de chegada, usada pra fila de espera
   primary key (racha_id, jogador_id)
 );
 

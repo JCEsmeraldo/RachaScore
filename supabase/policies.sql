@@ -159,6 +159,117 @@ $$;
 grant execute on function public.adicionar_membro_grupo(uuid, text, text) to authenticated;
 
 -- ============================================================
+-- RPC: criar grupo (já vincula o dono como membro/jogador)
+-- ============================================================
+-- Mesmo problema do RETURNING vs RLS: um INSERT em grupos seguido de
+-- .select() reaplica a policy de SELECT (is_membro_grupo), que depende de
+-- is_dono_grupo consultar a própria tabela grupos de dentro de uma função
+-- security definer — na prática se mostrou inconsistente run a run. RPC
+-- evita o problema (sem RETURNING exposto a policy) e de quebra já cria o
+-- jogador do dono + o vínculo em membros_grupo atomicamente.
+create or replace function public.criar_grupo(p_nome text)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_grupo_id uuid;
+  v_jogador_id uuid;
+  v_nome_jogador text;
+begin
+  insert into grupos (nome, dono_id) values (p_nome, auth.uid()) returning id into v_grupo_id;
+
+  select id into v_jogador_id from jogadores where user_id = auth.uid();
+
+  if v_jogador_id is null then
+    select nome into v_nome_jogador from profiles where id = auth.uid();
+    insert into jogadores (nome, user_id) values (coalesce(v_nome_jogador, 'Jogador'), auth.uid())
+    returning id into v_jogador_id;
+  end if;
+
+  insert into membros_grupo (grupo_id, jogador_id) values (v_grupo_id, v_jogador_id)
+  on conflict do nothing;
+
+  return v_grupo_id;
+end;
+$$;
+
+grant execute on function public.criar_grupo(text) to authenticated;
+
+-- ============================================================
+-- RPC: presença com limite + lista de espera
+-- ============================================================
+-- Se o racha tem limite_jogadores, confirma direto até bater o limite; depois
+-- disso entra em espera. Ao tirar alguém que tava confirmado, promove o
+-- próximo da espera (ordem de chegada via created_at) automaticamente.
+
+create or replace function public.atualizar_presenca(p_racha_id uuid, p_jogador_id uuid, p_quer_jogar boolean)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_grupo_id uuid;
+  v_limite int;
+  v_confirmados int;
+  v_status_atual text;
+  v_proximo_jogador_id uuid;
+begin
+  select grupo_id into v_grupo_id from rachas where id = p_racha_id;
+
+  if not public.is_organizador_grupo(v_grupo_id) then
+    raise exception 'Somente o dono ou admin do grupo pode gerenciar presença';
+  end if;
+
+  select status into v_status_atual
+  from presencas_racha
+  where racha_id = p_racha_id and jogador_id = p_jogador_id;
+
+  if not p_quer_jogar then
+    insert into presencas_racha (racha_id, jogador_id, status)
+    values (p_racha_id, p_jogador_id, 'ausente')
+    on conflict (racha_id, jogador_id) do update set status = 'ausente';
+
+    if v_status_atual = 'confirmado' then
+      select jogador_id into v_proximo_jogador_id
+      from presencas_racha
+      where racha_id = p_racha_id and status = 'espera'
+      order by created_at asc
+      limit 1;
+
+      if v_proximo_jogador_id is not null then
+        update presencas_racha
+        set status = 'confirmado'
+        where racha_id = p_racha_id and jogador_id = v_proximo_jogador_id;
+      end if;
+    end if;
+
+    return;
+  end if;
+
+  select limite_jogadores into v_limite from rachas where id = p_racha_id;
+
+  select count(*) into v_confirmados
+  from presencas_racha
+  where racha_id = p_racha_id and status = 'confirmado';
+
+  if v_limite is null or v_confirmados < v_limite then
+    insert into presencas_racha (racha_id, jogador_id, status)
+    values (p_racha_id, p_jogador_id, 'confirmado')
+    on conflict (racha_id, jogador_id) do update set status = 'confirmado';
+  else
+    insert into presencas_racha (racha_id, jogador_id, status)
+    values (p_racha_id, p_jogador_id, 'espera')
+    on conflict (racha_id, jogador_id) do update set status = 'espera';
+  end if;
+end;
+$$;
+
+grant execute on function public.atualizar_presenca(uuid, uuid, boolean) to authenticated;
+
+-- ============================================================
 -- RPC: link de convite (compartilhar grupo em vez de convidar 1 a 1)
 -- ============================================================
 

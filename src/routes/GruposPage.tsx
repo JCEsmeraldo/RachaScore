@@ -2,7 +2,6 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
-import { obterOuCriarJogadorProprio } from '../lib/jogadores'
 import type { Grupo } from '../lib/types'
 
 export function GruposPage() {
@@ -39,32 +38,15 @@ export function GruposPage() {
     setCriando(true)
     setErro(null)
 
-    const { data: grupo, error } = await supabase
-      .from('grupos')
-      .insert({ nome: nomeNovoGrupo.trim(), dono_id: session.user.id })
-      .select()
-      .single()
-
-    if (error || !grupo) {
-      setCriando(false)
-      setErro(error?.message ?? 'Erro ao criar grupo')
-      return
-    }
-
-    try {
-      const jogadorId = await obterOuCriarJogadorProprio(session)
-      const { error: erroMembro } = await supabase
-        .from('membros_grupo')
-        .insert({ grupo_id: grupo.id, jogador_id: jogadorId })
-
-      if (erroMembro) throw erroMembro
-    } catch (e) {
-      setCriando(false)
-      setErro(e instanceof Error ? e.message : 'Erro ao adicionar você como membro')
-      return
-    }
+    const { error } = await supabase.rpc('criar_grupo', { p_nome: nomeNovoGrupo.trim() })
 
     setCriando(false)
+
+    if (error) {
+      setErro(error.message)
+      return
+    }
+
     setNomeNovoGrupo('')
     carregarGrupos()
   }

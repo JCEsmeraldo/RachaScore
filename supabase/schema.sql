@@ -15,6 +15,7 @@ create table grupos (
   id uuid primary key default gen_random_uuid(),
   nome text not null,
   dono_id uuid not null references profiles(id),
+  convite_token uuid not null default gen_random_uuid() unique, -- link de convite; regenerar invalida o link antigo
   created_at timestamptz not null default now()
 );
 
@@ -23,6 +24,7 @@ create table jogadores (
   id uuid primary key default gen_random_uuid(),
   nome text not null,
   user_id uuid references profiles(id),
+  email text, -- convite pendente: linkado ao user_id automaticamente no signup (ver handle_new_user)
   created_at timestamptz not null default now()
 );
 
@@ -30,6 +32,7 @@ create table jogadores (
 create table membros_grupo (
   grupo_id uuid not null references grupos(id) on delete cascade,
   jogador_id uuid not null references jogadores(id) on delete cascade,
+  is_admin boolean not null default false, -- mesmos poderes do dono, exceto apagar o grupo
   created_at timestamptz not null default now(),
   primary key (grupo_id, jogador_id)
 );

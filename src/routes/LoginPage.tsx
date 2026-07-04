@@ -1,6 +1,12 @@
 import { useState, type FormEvent } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/AuthContext'
+import { CHAVE_CONVITE_PENDENTE } from './ConvitePage'
+
+function destinoAposLogin() {
+  const token = localStorage.getItem(CHAVE_CONVITE_PENDENTE)
+  return token ? `/convite/${token}` : '/'
+}
 
 export function LoginPage() {
   const [mode, setMode] = useState<'login' | 'signup'>('login')
@@ -15,7 +21,7 @@ export function LoginPage() {
   const navigate = useNavigate()
 
   if (!loading && session) {
-    return <Navigate to="/" replace />
+    return <Navigate to={destinoAposLogin()} replace />
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -42,7 +48,7 @@ export function LoginPage() {
       return
     }
 
-    navigate('/')
+    navigate(destinoAposLogin())
   }
 
   return (

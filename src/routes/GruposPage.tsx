@@ -1,6 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
+import { obterOuCriarJogadorProprio } from '../lib/jogadores'
 import type { Grupo } from '../lib/types'
 
 export function GruposPage() {
@@ -37,17 +39,32 @@ export function GruposPage() {
     setCriando(true)
     setErro(null)
 
-    const { error } = await supabase
+    const { data: grupo, error } = await supabase
       .from('grupos')
       .insert({ nome: nomeNovoGrupo.trim(), dono_id: session.user.id })
+      .select()
+      .single()
 
-    setCriando(false)
-
-    if (error) {
-      setErro(error.message)
+    if (error || !grupo) {
+      setCriando(false)
+      setErro(error?.message ?? 'Erro ao criar grupo')
       return
     }
 
+    try {
+      const jogadorId = await obterOuCriarJogadorProprio(session)
+      const { error: erroMembro } = await supabase
+        .from('membros_grupo')
+        .insert({ grupo_id: grupo.id, jogador_id: jogadorId })
+
+      if (erroMembro) throw erroMembro
+    } catch (e) {
+      setCriando(false)
+      setErro(e instanceof Error ? e.message : 'Erro ao adicionar você como membro')
+      return
+    }
+
+    setCriando(false)
     setNomeNovoGrupo('')
     carregarGrupos()
   }
@@ -91,11 +108,13 @@ export function GruposPage() {
         ) : (
           <ul className="space-y-2">
             {grupos.map((grupo) => (
-              <li
-                key={grupo.id}
-                className="rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3"
-              >
-                {grupo.nome}
+              <li key={grupo.id}>
+                <Link
+                  to={`/grupos/${grupo.id}`}
+                  className="block rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3 hover:border-neutral-700"
+                >
+                  {grupo.nome}
+                </Link>
               </li>
             ))}
           </ul>

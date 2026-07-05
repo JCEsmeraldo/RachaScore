@@ -18,6 +18,8 @@ dist-ssr
 !.vscode/extensions.json
 .idea
 .claude
+.agents
+skills-lock.json
 scripts
 .DS_Store
 *.suo

@@ -258,7 +258,7 @@ export function CriarPartidaPage() {
     navigate(`/grupos/${grupoId}/rachas/${rachaId}/partidas/${partida.id}`)
   }
 
-  function opcoesTime(selecaoAtual: string, outraSelecao: string) {
+  function opcoesTime(outraSelecao: string) {
     return (
       <>
         <option value="">Selecione</option>
@@ -303,7 +303,7 @@ export function CriarPartidaPage() {
                 onChange={(e) => setLadoASelecao(e.target.value)}
                 className="w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 outline-none focus:border-emerald-500"
               >
-                {opcoesTime(ladoASelecao, ladoBSelecao)}
+                {opcoesTime(ladoBSelecao)}
               </select>
 
               {ladoASelecao && ladoASelecao !== CUSTOM && (
@@ -344,7 +344,7 @@ export function CriarPartidaPage() {
                 onChange={(e) => setLadoBSelecao(e.target.value)}
                 className="w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 outline-none focus:border-emerald-500"
               >
-                {opcoesTime(ladoBSelecao, ladoASelecao)}
+                {opcoesTime(ladoASelecao)}
               </select>
 
               {ladoBSelecao && ladoBSelecao !== CUSTOM && (

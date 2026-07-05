@@ -68,7 +68,8 @@ create table presencas_racha (
   jogador_id uuid not null references jogadores(id) on delete cascade,
   status text not null default 'confirmado' check (status in ('confirmado', 'espera', 'ausente')),
   time_id uuid references times(id),
-  created_at timestamptz not null default now(), -- ordem de chegada, usada pra fila de espera
+  created_at timestamptz not null default now(),
+  pediu_vaga_em timestamptz not null default now(), -- atualizado toda vez que pede presença; ordena a fila de espera
   primary key (racha_id, jogador_id)
 );
 

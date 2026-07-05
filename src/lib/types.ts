@@ -58,6 +58,32 @@ export type PresencaComJogador = {
   jogador_id: string
   status: StatusPresenca
   time_id: string | null
-  created_at: string
+  pediu_vaga_em: string
   jogadores: Jogador | null
 }
+
+export type StatusPartida = 'agendada' | 'em_andamento' | 'finalizada'
+
+export type Partida = {
+  id: string
+  racha_id: string
+  time_a_id: string
+  time_b_id: string
+  status: StatusPartida
+  placar_a: number
+  placar_b: number
+  vencedor_id: string | null
+  created_at: string
+}
+
+export type SetPartida = {
+  id: string
+  partida_id: string
+  numero: number
+  placar_a: number
+  placar_b: number
+  vencedor_id: string | null
+  created_at: string
+}
+
+export type MotivoPonto = 'ataque' | 'bloqueio' | 'saque' | 'erro_adversario' | 'outro'

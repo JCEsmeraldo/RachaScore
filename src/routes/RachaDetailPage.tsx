@@ -1,16 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
-import { useAuth } from '../lib/AuthContext'
-import type {
-  ConfigFutebol,
-  ConfigVolei,
-  Grupo,
-  MembroComJogador,
-  PresencaComJogador,
-  Racha,
-  Time,
-} from '../lib/types'
+import type { ConfigFutebol, ConfigVolei, PresencaComJogador, Racha } from '../lib/types'
 
 function resumoConfig(racha: Racha) {
   if (racha.modalidade === 'futebol') {
@@ -24,210 +15,135 @@ function resumoConfig(racha: Racha) {
   return `${c.num_sets} sets até ${c.pontos_set}`
 }
 
-function embaralhar<T>(lista: T[]): T[] {
-  const copia = [...lista]
-  for (let i = copia.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[copia[i], copia[j]] = [copia[j], copia[i]]
+function gerarTextoCompartilhar(racha: Racha, confirmados: PresencaComJogador[], espera: PresencaComJogador[]) {
+  const emoji = racha.modalidade === 'volei' ? '🏐' : '⚽'
+  const linhas = [
+    `${emoji} ${racha.modalidade === 'volei' ? 'Vôlei' : 'Futebol'} — ${racha.modo === 'torneio' ? 'Torneio' : 'Jogo rápido'}`,
+    `📅 ${new Date(racha.data_hora).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}`,
+  ]
+
+  if (racha.local) linhas.push(`📍 ${racha.local}`)
+
+  linhas.push('')
+  linhas.push(
+    `Confirmados (${confirmados.length}${racha.limite_jogadores ? `/${racha.limite_jogadores}` : ''}):`,
+  )
+  linhas.push(
+    ...(confirmados.length > 0
+      ? confirmados.map((p, i) => `${i + 1}. ${p.jogadores?.nome ?? '(sem nome)'}`)
+      : ['(ninguém confirmado ainda)']),
+  )
+
+  if (espera.length > 0) {
+    linhas.push('')
+    linhas.push('Na fila de espera:')
+    linhas.push(...espera.map((p, i) => `${i + 1}. ${p.jogadores?.nome ?? '(sem nome)'}`))
   }
-  return copia
+
+  return linhas.join('\n')
 }
 
 export function RachaDetailPage() {
   const { grupoId, rachaId } = useParams<{ grupoId: string; rachaId: string }>()
-  const { session } = useAuth()
 
   const [racha, setRacha] = useState<Racha | null>(null)
-  const [grupo, setGrupo] = useState<Grupo | null>(null)
-  const [presencas, setPresencas] = useState<PresencaComJogador[]>([])
-  const [times, setTimes] = useState<Time[]>([])
+  const [totalConfirmados, setTotalConfirmados] = useState(0)
+  const [totalEspera, setTotalEspera] = useState(0)
+  const [totalTimes, setTotalTimes] = useState(0)
+  const [totalPartidas, setTotalPartidas] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [sorteando, setSorteando] = useState(false)
+  const [erroFatal, setErroFatal] = useState<string | null>(null)
   const [erro, setErro] = useState<string | null>(null)
-
-  const souOrganizador =
-    !!grupo &&
-    !!session &&
-    (grupo.dono_id === session.user.id ||
-      presencas.find((p) => p.jogadores?.user_id === session.user.id) !== undefined)
-
-  async function carregar() {
-    if (!rachaId || !grupoId) return
-    setLoading(true)
-
-    const { data: rachaData, error: erroRacha } = await supabase
-      .from('rachas')
-      .select('*')
-      .eq('id', rachaId)
-      .single()
-
-    if (erroRacha || !rachaData) {
-      setErro(erroRacha?.message ?? 'Racha não encontrado')
-      setLoading(false)
-      return
-    }
-
-    setRacha(rachaData)
-
-    const [
-      { data: grupoData, error: erroGrupo },
-      { data: membrosData, error: erroMembros },
-      { data: presencasData, error: erroPresencas },
-      { data: timesData, error: erroTimes },
-    ] = await Promise.all([
-      supabase.from('grupos').select('*').eq('id', grupoId).single(),
-      supabase
-        .from('membros_grupo')
-        .select('jogador_id, is_admin, jogadores(id, nome, user_id, email, created_at)')
-        .eq('grupo_id', grupoId),
-      supabase
-        .from('presencas_racha')
-        .select('jogador_id, status, time_id, created_at, jogadores(id, nome, user_id, email, created_at)')
-        .eq('racha_id', rachaId),
-      supabase.from('times').select('*').eq('racha_id', rachaId),
-    ])
-
-    if (erroGrupo) setErro(erroGrupo.message)
-    else setGrupo(grupoData)
-
-    if (erroTimes) setErro(erroTimes.message)
-    else setTimes(timesData ?? [])
-
-    if (!erroMembros && !erroPresencas) {
-      const membros = (membrosData ?? []) as unknown as MembroComJogador[]
-      const existentes = (presencasData ?? []) as unknown as PresencaComJogador[]
-
-      const combinado: PresencaComJogador[] = membros.map((m) => {
-        const presenca = existentes.find((p) => p.jogador_id === m.jogador_id)
-        return (
-          presenca ?? {
-            jogador_id: m.jogador_id,
-            status: 'ausente' as const,
-            time_id: null,
-            created_at: '',
-            jogadores: m.jogadores,
-          }
-        )
-      })
-
-      setPresencas(combinado)
-    } else {
-      setErro(erroMembros?.message ?? erroPresencas?.message ?? 'Erro ao carregar presença')
-    }
-
-    setLoading(false)
-  }
+  const [copiado, setCopiado] = useState(false)
 
   useEffect(() => {
-    carregar()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [grupoId, rachaId])
+    async function carregar() {
+      if (!rachaId) return
+      setLoading(true)
 
-  async function handleAlternarPresenca(jogadorId: string, querJogar: boolean) {
-    if (!rachaId) return
-    setErro(null)
+      const { data: rachaData, error: erroRacha } = await supabase
+        .from('rachas')
+        .select('*')
+        .eq('id', rachaId)
+        .single()
 
-    const { error } = await supabase.rpc('atualizar_presenca', {
-      p_racha_id: rachaId,
-      p_jogador_id: jogadorId,
-      p_quer_jogar: querJogar,
-    })
-
-    if (error) {
-      setErro(error.message)
-      return
-    }
-
-    carregar()
-  }
-
-  async function handleSortear() {
-    if (!rachaId || !racha) return
-
-    const confirmados = presencas.filter((p) => p.status === 'confirmado').map((p) => p.jogador_id)
-    const numTimes = Math.floor(confirmados.length / racha.tamanho_equipe)
-
-    if (numTimes < 2) {
-      setErro(
-        `Precisa de pelo menos ${racha.tamanho_equipe * 2} confirmados pra sortear 2 times (times de ${racha.tamanho_equipe})`,
-      )
-      return
-    }
-
-    setSorteando(true)
-    setErro(null)
-
-    await supabase.from('presencas_racha').update({ time_id: null }).eq('racha_id', rachaId)
-    await supabase.from('times').delete().eq('racha_id', rachaId)
-
-    const { data: novosTimes, error: erroTimes } = await supabase
-      .from('times')
-      .insert(
-        Array.from({ length: numTimes }, (_, i) => ({ racha_id: rachaId, nome: `Time ${i + 1}` })),
-      )
-      .select()
-
-    if (erroTimes || !novosTimes) {
-      setSorteando(false)
-      setErro(erroTimes?.message ?? 'Erro ao criar times')
-      return
-    }
-
-    const sorteados = embaralhar(confirmados)
-    const gruposDeTimes: string[][] = Array.from({ length: numTimes }, () => [])
-
-    if (racha.modo === 'torneio') {
-      // torneio não deixa ninguém de fora — sobra se distribui entre os times (fica desigual)
-      sorteados.forEach((jogadorId, i) => {
-        gruposDeTimes[i % numTimes].push(jogadorId)
-      })
-    } else {
-      // rapido: só preenche times completos, sobra fica de fora
-      sorteados.slice(0, numTimes * racha.tamanho_equipe).forEach((jogadorId, i) => {
-        gruposDeTimes[Math.floor(i / racha.tamanho_equipe)].push(jogadorId)
-      })
-    }
-
-    for (let i = 0; i < numTimes; i++) {
-      const { error } = await supabase
-        .from('presencas_racha')
-        .update({ time_id: novosTimes[i].id })
-        .eq('racha_id', rachaId)
-        .in('jogador_id', gruposDeTimes[i])
-
-      if (error) {
-        setErro(error.message)
-        break
+      if (erroRacha || !rachaData) {
+        setErroFatal(erroRacha?.message ?? 'Racha não encontrado')
+        setLoading(false)
+        return
       }
+
+      setRacha(rachaData)
+
+      const [
+        { count: countConfirmados },
+        { count: countEspera },
+        { count: countTimes },
+        { count: countPartidas },
+      ] = await Promise.all([
+        supabase
+          .from('presencas_racha')
+          .select('*', { count: 'exact', head: true })
+          .eq('racha_id', rachaId)
+          .eq('status', 'confirmado'),
+        supabase
+          .from('presencas_racha')
+          .select('*', { count: 'exact', head: true })
+          .eq('racha_id', rachaId)
+          .eq('status', 'espera'),
+        supabase.from('times').select('*', { count: 'exact', head: true }).eq('racha_id', rachaId),
+        supabase.from('partidas').select('*', { count: 'exact', head: true }).eq('racha_id', rachaId),
+      ])
+
+      setTotalConfirmados(countConfirmados ?? 0)
+      setTotalEspera(countEspera ?? 0)
+      setTotalTimes(countTimes ?? 0)
+      setTotalPartidas(countPartidas ?? 0)
+      setLoading(false)
     }
 
-    setSorteando(false)
     carregar()
-  }
+  }, [rachaId])
 
-  async function handleMoverJogador(jogadorId: string, novoTimeId: string | null) {
-    if (!rachaId) return
+  async function handleCompartilhar() {
+    if (!rachaId || !racha) return
     setErro(null)
 
-    const { error } = await supabase
+    const { data: presencasData, error: erroPresencas } = await supabase
       .from('presencas_racha')
-      .update({ time_id: novoTimeId })
+      .select('jogador_id, status, time_id, pediu_vaga_em, jogadores(id, nome, user_id, email, created_at)')
       .eq('racha_id', rachaId)
-      .eq('jogador_id', jogadorId)
 
-    if (error) {
-      setErro(error.message)
+    if (erroPresencas) {
+      setErro(erroPresencas.message)
       return
     }
 
-    carregar()
-  }
+    const presencas = (presencasData ?? []) as unknown as PresencaComJogador[]
+    const confirmados = presencas.filter((p) => p.status === 'confirmado')
+    const espera = presencas
+      .filter((p) => p.status === 'espera')
+      .sort((a, b) => a.pediu_vaga_em.localeCompare(b.pediu_vaga_em))
 
-  const confirmados = presencas.filter((p) => p.status === 'confirmado')
-  const espera = presencas
-    .filter((p) => p.status === 'espera')
-    .sort((a, b) => a.created_at.localeCompare(b.created_at))
-  const semTime = confirmados.filter((p) => !p.time_id)
+    const texto = gerarTextoCompartilhar(racha, confirmados, espera)
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ text: texto })
+      } catch {
+        // usuário cancelou o share, não faz nada
+      }
+      return
+    }
+
+    try {
+      await navigator.clipboard.writeText(texto)
+      setCopiado(true)
+      setTimeout(() => setCopiado(false), 2000)
+    } catch {
+      setErro('Não foi possível copiar. Copia manual: ' + texto)
+    }
+  }
 
   return (
     <div className="min-h-svh bg-neutral-950 px-4 py-6 text-white">
@@ -240,14 +156,22 @@ export function RachaDetailPage() {
 
         {loading ? (
           <p className="text-neutral-400">Carregando...</p>
-        ) : erro || !racha ? (
-          <p className="text-red-400">{erro ?? 'Racha não encontrado'}</p>
+        ) : erroFatal || !racha ? (
+          <p className="text-red-400">{erroFatal ?? 'Racha não encontrado'}</p>
         ) : (
           <>
             <div className="space-y-2 rounded-lg border border-neutral-800 bg-neutral-900 p-4">
-              <h1 className="text-xl font-semibold capitalize">
-                {racha.modalidade} — {racha.modo === 'torneio' ? 'Torneio' : 'Jogo rápido'}
-              </h1>
+              <div className="flex items-start justify-between gap-2">
+                <h1 className="text-xl font-semibold capitalize">
+                  {racha.modalidade} — {racha.modo === 'torneio' ? 'Torneio' : 'Jogo rápido'}
+                </h1>
+                <button
+                  onClick={handleCompartilhar}
+                  className="shrink-0 rounded-lg border border-neutral-700 px-3 py-1 text-sm text-neutral-300 hover:border-neutral-600"
+                >
+                  {copiado ? 'Copiado!' : 'Compartilhar'}
+                </button>
+              </div>
               <p className="text-sm text-neutral-400">
                 {new Date(racha.data_hora).toLocaleString('pt-BR', {
                   dateStyle: 'short',
@@ -262,113 +186,34 @@ export function RachaDetailPage() {
             {erro && <p className="text-sm text-red-400">{erro}</p>}
 
             <div className="space-y-2">
-              <h2 className="text-sm font-medium text-neutral-400">
-                Presença — {confirmados.length} confirmado{confirmados.length === 1 ? '' : 's'}
-                {racha.limite_jogadores && ` de ${racha.limite_jogadores}`}
-                {espera.length > 0 && ` · ${espera.length} na espera`}
-              </h2>
-              <ul className="space-y-2">
-                {presencas.map((p) => (
-                  <li
-                    key={p.jogador_id}
-                    className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-2"
-                  >
-                    <span>
-                      {p.jogadores?.nome ?? '(sem nome)'}
-                      {p.status === 'espera' && (
-                        <span className="ml-2 text-xs text-amber-400">na fila</span>
-                      )}
-                    </span>
-                    <input
-                      type="checkbox"
-                      checked={p.status !== 'ausente'}
-                      disabled={!souOrganizador}
-                      onChange={(e) => handleAlternarPresenca(p.jogador_id, e.target.checked)}
-                      className="accent-emerald-500"
-                    />
-                  </li>
-                ))}
-              </ul>
+              <Link
+                to={`/grupos/${grupoId}/rachas/${rachaId}/presenca`}
+                className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-4 hover:border-neutral-700"
+              >
+                <span className="font-medium">Presença</span>
+                <span className="text-sm text-neutral-500">
+                  {totalConfirmados}
+                  {racha.limite_jogadores && `/${racha.limite_jogadores}`}
+                  {totalEspera > 0 && ` · ${totalEspera} na espera`}
+                </span>
+              </Link>
+
+              <Link
+                to={`/grupos/${grupoId}/rachas/${rachaId}/times`}
+                className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-4 hover:border-neutral-700"
+              >
+                <span className="font-medium">Times</span>
+                <span className="text-sm text-neutral-500">{totalTimes}</span>
+              </Link>
+
+              <Link
+                to={`/grupos/${grupoId}/rachas/${rachaId}/partidas`}
+                className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-4 hover:border-neutral-700"
+              >
+                <span className="font-medium">Partidas</span>
+                <span className="text-sm text-neutral-500">{totalPartidas}</span>
+              </Link>
             </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <h2 className="text-sm font-medium text-neutral-400">Times</h2>
-                {souOrganizador && (
-                  <button
-                    onClick={handleSortear}
-                    disabled={sorteando}
-                    className="text-sm text-emerald-400 hover:text-emerald-300 disabled:opacity-50"
-                  >
-                    {sorteando ? 'Sorteando...' : times.length > 0 ? 'Sortear de novo' : 'Sortear times'}
-                  </button>
-                )}
-              </div>
-
-              {times.length === 0 ? (
-                <p className="text-sm text-neutral-500">Times ainda não sorteados.</p>
-              ) : (
-                <div className="space-y-3">
-                  {times.map((time) => (
-                    <div key={time.id} className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
-                      <h3 className="mb-2 text-sm font-medium">{time.nome}</h3>
-                      <ul className="space-y-1">
-                        {confirmados
-                          .filter((p) => p.time_id === time.id)
-                          .map((p) => (
-                            <li key={p.jogador_id} className="flex items-center justify-between text-sm">
-                              <span>{p.jogadores?.nome}</span>
-                              {souOrganizador && (
-                                <select
-                                  value={time.id}
-                                  onChange={(e) => handleMoverJogador(p.jogador_id, e.target.value || null)}
-                                  className="rounded border border-neutral-700 bg-neutral-800 px-1 py-0.5 text-xs"
-                                >
-                                  {times.map((t) => (
-                                    <option key={t.id} value={t.id}>
-                                      {t.nome}
-                                    </option>
-                                  ))}
-                                  <option value="">Fora</option>
-                                </select>
-                              )}
-                            </li>
-                          ))}
-                      </ul>
-                    </div>
-                  ))}
-
-                  {semTime.length > 0 && (
-                    <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
-                      <h3 className="mb-2 text-sm font-medium text-neutral-400">De fora</h3>
-                      <ul className="space-y-1">
-                        {semTime.map((p) => (
-                          <li key={p.jogador_id} className="flex items-center justify-between text-sm">
-                            <span>{p.jogadores?.nome}</span>
-                            {souOrganizador && (
-                              <select
-                                value=""
-                                onChange={(e) => handleMoverJogador(p.jogador_id, e.target.value || null)}
-                                className="rounded border border-neutral-700 bg-neutral-800 px-1 py-0.5 text-xs"
-                              >
-                                <option value="">Fora</option>
-                                {times.map((t) => (
-                                  <option key={t.id} value={t.id}>
-                                    {t.nome}
-                                  </option>
-                                ))}
-                              </select>
-                            )}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <p className="text-sm text-neutral-500">Partidas e placar entram na próxima etapa.</p>
           </>
         )}
       </div>

@@ -216,11 +216,13 @@ declare
   v_confirmados int;
   v_status_atual text;
   v_proximo_jogador_id uuid;
+  v_meu_jogador_id uuid;
 begin
   select grupo_id into v_grupo_id from rachas where id = p_racha_id;
+  select id into v_meu_jogador_id from jogadores where user_id = auth.uid();
 
-  if not public.is_organizador_grupo(v_grupo_id) then
-    raise exception 'Somente o dono ou admin do grupo pode gerenciar presença';
+  if not (public.is_organizador_grupo(v_grupo_id) or p_jogador_id = v_meu_jogador_id) then
+    raise exception 'Você só pode confirmar sua própria presença';
   end if;
 
   select status into v_status_atual
@@ -236,7 +238,7 @@ begin
       select jogador_id into v_proximo_jogador_id
       from presencas_racha
       where racha_id = p_racha_id and status = 'espera'
-      order by created_at asc
+      order by pediu_vaga_em asc
       limit 1;
 
       if v_proximo_jogador_id is not null then
@@ -256,13 +258,13 @@ begin
   where racha_id = p_racha_id and status = 'confirmado';
 
   if v_limite is null or v_confirmados < v_limite then
-    insert into presencas_racha (racha_id, jogador_id, status)
-    values (p_racha_id, p_jogador_id, 'confirmado')
-    on conflict (racha_id, jogador_id) do update set status = 'confirmado';
+    insert into presencas_racha (racha_id, jogador_id, status, pediu_vaga_em)
+    values (p_racha_id, p_jogador_id, 'confirmado', now())
+    on conflict (racha_id, jogador_id) do update set status = 'confirmado', pediu_vaga_em = now();
   else
-    insert into presencas_racha (racha_id, jogador_id, status)
-    values (p_racha_id, p_jogador_id, 'espera')
-    on conflict (racha_id, jogador_id) do update set status = 'espera';
+    insert into presencas_racha (racha_id, jogador_id, status, pediu_vaga_em)
+    values (p_racha_id, p_jogador_id, 'espera', now())
+    on conflict (racha_id, jogador_id) do update set status = 'espera', pediu_vaga_em = now();
   end if;
 end;
 $$;

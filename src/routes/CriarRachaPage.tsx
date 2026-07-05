@@ -19,8 +19,8 @@ export function CriarRachaPage() {
   const [usarGols, setUsarGols] = useState(false)
   const [gols, setGols] = useState(5)
 
-  const [numSets, setNumSets] = useState(3)
-  const [pontosSet, setPontosSet] = useState(25)
+  const [numSets, setNumSets] = useState(1)
+  const [pontosSet, setPontosSet] = useState(15)
 
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)

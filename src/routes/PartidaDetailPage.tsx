@@ -1,0 +1,384 @@
+import { useEffect, useState } from 'react'
+import { Link, useParams } from 'react-router-dom'
+import { supabase } from '../lib/supabaseClient'
+import { useAuth } from '../lib/AuthContext'
+import type { ConfigVolei, MotivoPonto, Partida, Racha, SetPartida, Time } from '../lib/types'
+
+type JogadorTime = { jogador_id: string; nome: string }
+
+const MOTIVOS: { valor: MotivoPonto; label: string }[] = [
+  { valor: 'ataque', label: 'Ataque' },
+  { valor: 'bloqueio', label: 'Bloqueio' },
+  { valor: 'saque', label: 'Saque' },
+  { valor: 'outro', label: 'Outro' },
+]
+
+export function PartidaDetailPage() {
+  const { grupoId, rachaId, partidaId } = useParams<{
+    grupoId: string
+    rachaId: string
+    partidaId: string
+  }>()
+  const { session } = useAuth()
+
+  const [partida, setPartida] = useState<Partida | null>(null)
+  const [racha, setRacha] = useState<Racha | null>(null)
+  const [timeA, setTimeA] = useState<Time | null>(null)
+  const [timeB, setTimeB] = useState<Time | null>(null)
+  const [jogadoresA, setJogadoresA] = useState<JogadorTime[]>([])
+  const [jogadoresB, setJogadoresB] = useState<JogadorTime[]>([])
+  const [setAtual, setSetAtual] = useState<SetPartida | null>(null)
+  const [setsAnteriores, setSetsAnteriores] = useState<SetPartida[]>([])
+  const [souOrganizador, setSouOrganizador] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [erro, setErro] = useState<string | null>(null)
+  const [expandido, setExpandido] = useState<string | null>(null)
+
+  async function carregar() {
+    if (!partidaId || !rachaId) return
+    setLoading(true)
+
+    const { data: partidaData, error: erroPartida } = await supabase
+      .from('partidas')
+      .select('*')
+      .eq('id', partidaId)
+      .single()
+
+    if (erroPartida || !partidaData) {
+      setErro(erroPartida?.message ?? 'Partida não encontrada')
+      setLoading(false)
+      return
+    }
+
+    setPartida(partidaData)
+
+    const { data: rachaData } = await supabase.from('rachas').select('*').eq('id', rachaId).single()
+    setRacha(rachaData)
+
+    const [
+      { data: grupoData },
+      { data: membrosData },
+      { data: timeAData },
+      { data: timeBData },
+      { data: presencasAData },
+      { data: presencasBData },
+      { data: setsData },
+    ] = await Promise.all([
+      supabase.from('grupos').select('*').eq('id', rachaData.grupo_id).single(),
+      supabase
+        .from('membros_grupo')
+        .select('is_admin, jogadores(user_id)')
+        .eq('grupo_id', rachaData.grupo_id),
+      supabase.from('times').select('*').eq('id', partidaData.time_a_id).single(),
+      supabase.from('times').select('*').eq('id', partidaData.time_b_id).single(),
+      supabase
+        .from('presencas_racha')
+        .select('jogador_id, jogadores(nome)')
+        .eq('racha_id', rachaId)
+        .eq('time_id', partidaData.time_a_id)
+        .eq('status', 'confirmado'),
+      supabase
+        .from('presencas_racha')
+        .select('jogador_id, jogadores(nome)')
+        .eq('racha_id', rachaId)
+        .eq('time_id', partidaData.time_b_id)
+        .eq('status', 'confirmado'),
+      supabase.from('sets').select('*').eq('partida_id', partidaId).order('numero', { ascending: true }),
+    ])
+
+    setTimeA(timeAData)
+    setTimeB(timeBData)
+    setJogadoresA(
+      (presencasAData ?? []).map((p: any) => ({ jogador_id: p.jogador_id, nome: p.jogadores?.nome ?? '?' })),
+    )
+    setJogadoresB(
+      (presencasBData ?? []).map((p: any) => ({ jogador_id: p.jogador_id, nome: p.jogadores?.nome ?? '?' })),
+    )
+
+    if (setsData) {
+      const abertos = setsData.filter((s) => !s.vencedor_id)
+      setSetAtual(abertos[abertos.length - 1] ?? null)
+      setSetsAnteriores(setsData.filter((s) => s.vencedor_id))
+    }
+
+    if (grupoData && session) {
+      const membros = (membrosData ?? []) as unknown as { is_admin: boolean; jogadores: { user_id: string | null } | null }[]
+      const propria = membros.find((m) => m.jogadores?.user_id === session.user.id)
+      setSouOrganizador(grupoData.dono_id === session.user.id || propria?.is_admin === true)
+    }
+
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    carregar()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [partidaId, rachaId])
+
+  function handleClicarJogador(jogadorId: string) {
+    setExpandido((atual) => (atual === jogadorId ? null : jogadorId))
+  }
+
+  function handleEscolherMotivo(timeId: string, jogadorId: string, motivo: MotivoPonto) {
+    setExpandido(null)
+    handlePonto(timeId, jogadorId, motivo)
+  }
+
+  async function handlePonto(timeId: string, jogadorId: string | null, motivo: MotivoPonto | null) {
+    if (!partidaId || !partida || !racha) return
+    setErro(null)
+
+    const ehVolei = racha.modalidade === 'volei'
+    const ehTimeA = timeId === partida.time_a_id
+
+    const { error: erroEvento } = await supabase.from('eventos_ponto').insert({
+      partida_id: partidaId,
+      set_id: ehVolei ? setAtual?.id ?? null : null,
+      time_id: timeId,
+      jogador_id: jogadorId,
+      motivo,
+    })
+
+    if (erroEvento) {
+      setErro(erroEvento.message)
+      return
+    }
+
+    if (ehVolei && setAtual) {
+      const campo = ehTimeA ? 'placar_a' : 'placar_b'
+      await supabase
+        .from('sets')
+        .update({ [campo]: setAtual[campo] + 1 })
+        .eq('id', setAtual.id)
+    } else {
+      const campo = ehTimeA ? 'placar_a' : 'placar_b'
+      await supabase
+        .from('partidas')
+        .update({ [campo]: partida[campo] + 1 })
+        .eq('id', partidaId)
+    }
+
+    carregar()
+  }
+
+  async function handleFecharSet() {
+    if (!partida || !racha || !setAtual) return
+    setErro(null)
+
+    const vencedorId =
+      setAtual.placar_a > setAtual.placar_b
+        ? partida.time_a_id
+        : setAtual.placar_b > setAtual.placar_a
+          ? partida.time_b_id
+          : null
+
+    if (!vencedorId) {
+      setErro('Set empatado — ajusta o placar antes de fechar')
+      return
+    }
+
+    await supabase.from('sets').update({ vencedor_id: vencedorId }).eq('id', setAtual.id)
+
+    const ehTimeA = vencedorId === partida.time_a_id
+    const campo = ehTimeA ? 'placar_a' : 'placar_b'
+    const novoPlacar = partida[campo] + 1
+
+    await supabase
+      .from('partidas')
+      .update({ [campo]: novoPlacar })
+      .eq('id', partida.id)
+
+    const config = racha.config as ConfigVolei
+    const setsPraVencer = Math.floor(config.num_sets / 2) + 1
+
+    if (novoPlacar >= setsPraVencer) {
+      await supabase
+        .from('partidas')
+        .update({ status: 'finalizada', vencedor_id: vencedorId })
+        .eq('id', partida.id)
+    } else {
+      await supabase.from('sets').insert({ partida_id: partida.id, numero: setAtual.numero + 1 })
+    }
+
+    carregar()
+  }
+
+  async function handleEncerrarPartida() {
+    if (!partida) return
+    setErro(null)
+
+    const vencedorId =
+      partida.placar_a > partida.placar_b
+        ? partida.time_a_id
+        : partida.placar_b > partida.placar_a
+          ? partida.time_b_id
+          : null
+
+    await supabase
+      .from('partidas')
+      .update({ status: 'finalizada', vencedor_id: vencedorId })
+      .eq('id', partida.id)
+
+    carregar()
+  }
+
+  if (loading) {
+    return <div className="min-h-svh bg-neutral-950 px-4 py-6 text-white">Carregando...</div>
+  }
+
+  if (erro || !partida || !racha || !timeA || !timeB) {
+    return (
+      <div className="min-h-svh bg-neutral-950 px-4 py-6 text-white">
+        <p className="text-red-400">{erro ?? 'Partida não encontrada'}</p>
+      </div>
+    )
+  }
+
+  const ehVolei = racha.modalidade === 'volei'
+  const placarA = ehVolei ? (setAtual?.placar_a ?? 0) : partida.placar_a
+  const placarB = ehVolei ? (setAtual?.placar_b ?? 0) : partida.placar_b
+  const finalizada = partida.status === 'finalizada'
+
+  return (
+    <div className="min-h-svh bg-neutral-950 px-4 py-6 text-white">
+      <div className="mx-auto max-w-md space-y-6">
+        <header>
+          <Link
+            to={`/grupos/${grupoId}/rachas/${rachaId}`}
+            className="text-sm text-neutral-400 hover:text-neutral-200"
+          >
+            ← Voltar pro racha
+          </Link>
+        </header>
+
+        <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-6 text-center">
+          {finalizada && <p className="mb-2 text-sm font-medium text-emerald-400">Partida finalizada</p>}
+          {ehVolei && (
+            <p className="mb-1 text-sm text-neutral-400">
+              Sets: {partida.placar_a} - {partida.placar_b}
+              {setAtual && ` · Set ${setAtual.numero}`}
+            </p>
+          )}
+          <div className="flex items-center justify-center gap-6">
+            <div className="flex-1">
+              <p className="truncate text-sm text-neutral-400">{timeA.nome}</p>
+              <p className="text-4xl font-bold">{placarA}</p>
+            </div>
+            <span className="text-2xl text-neutral-600">x</span>
+            <div className="flex-1">
+              <p className="truncate text-sm text-neutral-400">{timeB.nome}</p>
+              <p className="text-4xl font-bold">{placarB}</p>
+            </div>
+          </div>
+        </div>
+
+        {erro && <p className="text-sm text-red-400">{erro}</p>}
+
+        {souOrganizador && !finalizada && (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <h3 className="text-sm font-medium text-neutral-400">{timeA.nome}</h3>
+                {jogadoresA.map((j) => (
+                  <div key={j.jogador_id}>
+                    <button
+                      onClick={() =>
+                        ehVolei ? handleClicarJogador(j.jogador_id) : handlePonto(partida.time_a_id, j.jogador_id, null)
+                      }
+                      className="w-full rounded-lg border border-neutral-700 bg-neutral-900 px-2 py-2 text-sm hover:border-emerald-500"
+                    >
+                      +1 {j.nome}
+                    </button>
+                    {expandido === j.jogador_id && (
+                      <div className="mt-1 flex flex-wrap gap-1 rounded-lg border border-emerald-500/40 bg-emerald-500/5 p-2">
+                        {MOTIVOS.map((m) => (
+                          <button
+                            key={m.valor}
+                            type="button"
+                            onClick={() => handleEscolherMotivo(partida.time_a_id, j.jogador_id, m.valor)}
+                            className="rounded-full bg-neutral-800 px-2 py-1 text-xs text-neutral-200 hover:bg-emerald-500/20 hover:text-emerald-400"
+                          >
+                            {m.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+                <button
+                  onClick={() => handlePonto(partida.time_a_id, null, null)}
+                  className="w-full rounded-lg border border-neutral-800 px-2 py-2 text-xs text-neutral-500 hover:border-neutral-600"
+                >
+                  +1 sem autor
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                <h3 className="text-sm font-medium text-neutral-400">{timeB.nome}</h3>
+                {jogadoresB.map((j) => (
+                  <div key={j.jogador_id}>
+                    <button
+                      onClick={() =>
+                        ehVolei ? handleClicarJogador(j.jogador_id) : handlePonto(partida.time_b_id, j.jogador_id, null)
+                      }
+                      className="w-full rounded-lg border border-neutral-700 bg-neutral-900 px-2 py-2 text-sm hover:border-emerald-500"
+                    >
+                      +1 {j.nome}
+                    </button>
+                    {expandido === j.jogador_id && (
+                      <div className="mt-1 flex flex-wrap gap-1 rounded-lg border border-emerald-500/40 bg-emerald-500/5 p-2">
+                        {MOTIVOS.map((m) => (
+                          <button
+                            key={m.valor}
+                            type="button"
+                            onClick={() => handleEscolherMotivo(partida.time_b_id, j.jogador_id, m.valor)}
+                            className="rounded-full bg-neutral-800 px-2 py-1 text-xs text-neutral-200 hover:bg-emerald-500/20 hover:text-emerald-400"
+                          >
+                            {m.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+                <button
+                  onClick={() => handlePonto(partida.time_b_id, null, null)}
+                  className="w-full rounded-lg border border-neutral-800 px-2 py-2 text-xs text-neutral-500 hover:border-neutral-600"
+                >
+                  +1 sem autor
+                </button>
+              </div>
+            </div>
+
+            {ehVolei ? (
+              <button
+                onClick={handleFecharSet}
+                className="w-full rounded-lg bg-emerald-500 py-2 font-medium text-neutral-950"
+              >
+                Fechar set
+              </button>
+            ) : (
+              <button
+                onClick={handleEncerrarPartida}
+                className="w-full rounded-lg bg-emerald-500 py-2 font-medium text-neutral-950"
+              >
+                Encerrar partida
+              </button>
+            )}
+          </>
+        )}
+
+        {setsAnteriores.length > 0 && (
+          <div className="space-y-1">
+            <h3 className="text-sm font-medium text-neutral-400">Sets anteriores</h3>
+            {setsAnteriores.map((s) => (
+              <p key={s.id} className="text-sm text-neutral-500">
+                Set {s.numero}: {s.placar_a} - {s.placar_b}
+              </p>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

@@ -49,6 +49,7 @@ export type Time = {
   id: string
   racha_id: string
   nome: string
+  sorteio: boolean
   created_at: string
 }
 
@@ -73,6 +74,9 @@ export type Partida = {
   placar_a: number
   placar_b: number
   vencedor_id: string | null
+  cronometro_segundos: number
+  cronometro_rodando: boolean
+  cronometro_atualizado_em: string | null
   created_at: string
 }
 
@@ -87,3 +91,23 @@ export type SetPartida = {
 }
 
 export type MotivoPonto = 'ataque' | 'bloqueio' | 'saque' | 'erro_adversario' | 'outro'
+
+export type EscalacaoComJogador = {
+  jogador_id: string
+  time_id: string
+  jogadores: { nome: string } | null
+}
+
+export type ClassificacaoTime = {
+  racha_id: string
+  time_id: string
+  time_nome: string
+  jogos: number
+  vitorias: number
+  empates: number
+  derrotas: number
+  feitos: number
+  sofridos: number
+  saldo: number
+  pontos: number
+}

@@ -59,6 +59,7 @@ create table times (
   id uuid primary key default gen_random_uuid(),
   racha_id uuid not null references rachas(id) on delete cascade,
   nome text not null,
+  sorteio boolean not null default false, -- time gerado pelo "Sortear" (não pode ser apagado na tela Times)
   created_at timestamptz not null default now()
 );
 
@@ -83,6 +84,11 @@ create table partidas (
   placar_a int not null default 0,
   placar_b int not null default 0,
   vencedor_id uuid references times(id),
+  -- cronômetro do futebol: segundos acumulados até cronometro_atualizado_em, mais o
+  -- tempo real decorrido desde então se cronometro_rodando (calculado no cliente)
+  cronometro_segundos int not null default 0,
+  cronometro_rodando boolean not null default false,
+  cronometro_atualizado_em timestamptz,
   created_at timestamptz not null default now()
 );
 
@@ -109,8 +115,23 @@ create table eventos_ponto (
   created_at timestamptz not null default now()
 );
 
+-- Escalação por partida (só modo rápido): quem joga em qual time NAQUELA
+-- partida específica, sem prender o jogador ao time do racha inteiro (torneio
+-- continua usando presencas_racha.time_id, fixo pro racha, pra classificação
+-- fazer sentido).
+create table escalacoes_partida (
+  partida_id uuid not null references partidas(id) on delete cascade,
+  jogador_id uuid not null references jogadores(id) on delete cascade,
+  time_id uuid not null references times(id),
+  primary key (partida_id, jogador_id)
+);
+
 -- View: classificação do torneio (calculada, não armazenada)
-create view classificacao_racha as
+-- security_invoker: sem isso a view roda com privilégio de quem criou (postgres),
+-- ignorando RLS das tabelas base — vazaria classificação de racha de outros grupos.
+create view classificacao_racha
+with (security_invoker = true)
+as
 select
   p.racha_id,
   t.id as time_id,
@@ -157,9 +178,15 @@ alter table presencas_racha enable row level security;
 alter table partidas enable row level security;
 alter table sets enable row level security;
 alter table eventos_ponto enable row level security;
+alter table escalacoes_partida enable row level security;
 
 -- Tabelas criadas via SQL Editor não ganham GRANT automático pros roles do PostgREST
 -- (diferente de tabelas criadas pelo Table Editor). RLS restringe linhas, mas sem
 -- esse GRANT o acesso é negado por completo antes mesmo da RLS entrar em jogo.
 grant usage on schema public to authenticated;
 grant select, insert, update, delete on all tables in schema public to authenticated;
+
+-- Realtime: placar/cronômetro precisam sincronizar entre dispositivos vendo a
+-- mesma partida ao vivo. Sem isso o client não recebe updates de outro device.
+alter publication supabase_realtime add table partidas;
+alter publication supabase_realtime add table sets;

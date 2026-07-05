@@ -11,6 +11,7 @@ Table grupos {
   id uuid [pk, default: `gen_random_uuid()`]
   nome text [not null]
   dono_id uuid [not null]
+  convite_token uuid [not null, unique, default: `gen_random_uuid()`, note: 'link de convite; regenerar invalida o antigo']
   created_at timestamptz [not null, default: `now()`]
 }
 
@@ -18,12 +19,14 @@ Table jogadores {
   id uuid [pk, default: `gen_random_uuid()`]
   nome text [not null]
   user_id uuid [note: 'opcional - jogador pode não ter conta']
+  email text [note: 'convite pendente; linkado ao user_id automaticamente no signup']
   created_at timestamptz [not null, default: `now()`]
 }
 
 Table membros_grupo {
   grupo_id uuid [not null]
   jogador_id uuid [not null]
+  is_admin boolean [not null, default: false, note: 'mesmos poderes do dono, exceto apagar o grupo']
   created_at timestamptz [not null, default: `now()`]
 
   indexes {
@@ -40,6 +43,7 @@ Table rachas {
   config jsonb [not null, default: `'{}'`, note: 'regras de fim de partida, específicas por modalidade']
   data_hora timestamptz [not null]
   local text
+  limite_jogadores int [note: 'null = sem limite; acima disso, presença entra em lista de espera']
   created_at timestamptz [not null, default: `now()`]
 }
 
@@ -47,14 +51,17 @@ Table times {
   id uuid [pk, default: `gen_random_uuid()`]
   racha_id uuid [not null]
   nome text [not null]
+  sorteio boolean [not null, default: false, note: 'gerado pelo "Sortear" — não pode ser apagado na tela Times']
   created_at timestamptz [not null, default: `now()`]
 }
 
 Table presencas_racha {
   racha_id uuid [not null]
   jogador_id uuid [not null]
-  presente boolean [not null, default: true]
-  time_id uuid [note: 'time sorteado pro jogador naquele racha']
+  status presenca_status_enum [not null, default: 'confirmado']
+  time_id uuid [note: 'time atual do jogador naquele racha (torneio: fixo; rápido: do último sorteio/partida)']
+  created_at timestamptz [not null, default: `now()`]
+  pediu_vaga_em timestamptz [not null, default: `now()`, note: 'atualizado a cada pedido de presença; ordena a fila de espera']
 
   indexes {
     (racha_id, jogador_id) [pk]
@@ -70,6 +77,9 @@ Table partidas {
   placar_a int [not null, default: 0]
   placar_b int [not null, default: 0]
   vencedor_id uuid [note: 'null = empate (só futebol)']
+  cronometro_segundos int [not null, default: 0, note: 'segundos acumulados até cronometro_atualizado_em']
+  cronometro_rodando boolean [not null, default: false]
+  cronometro_atualizado_em timestamptz
   created_at timestamptz [not null, default: `now()`]
 }
 
@@ -97,6 +107,22 @@ Table eventos_ponto {
   created_at timestamptz [not null, default: `now()`]
 }
 
+Table escalacoes_partida {
+  partida_id uuid [not null]
+  jogador_id uuid [not null]
+  time_id uuid [not null]
+
+  indexes {
+    (partida_id, jogador_id) [pk]
+  }
+
+  note: '''
+    Escalação por partida (modo rápido): quem joga em qual time NAQUELA partida
+    específica, sem prender o jogador ao time do racha inteiro. Torneio continua
+    usando presencas_racha.time_id, fixo pro racha, pra classificação fazer sentido.
+  '''
+}
+
 enum modalidade_enum {
   futebol
   volei
@@ -105,6 +131,12 @@ enum modalidade_enum {
 enum modo_enum {
   torneio
   rapido
+}
+
+enum presenca_status_enum {
+  confirmado
+  espera
+  ausente
 }
 
 enum status_enum {
@@ -140,3 +172,9 @@ Ref: eventos_ponto.partida_id > partidas.id
 Ref: eventos_ponto.set_id > sets.id
 Ref: eventos_ponto.time_id > times.id
 Ref: eventos_ponto.jogador_id > jogadores.id
+Ref: escalacoes_partida.partida_id > partidas.id
+Ref: escalacoes_partida.jogador_id > jogadores.id
+Ref: escalacoes_partida.time_id > times.id
+
+// classificacao_racha: view calculada (não modelada) — agrega partidas
+// finalizadas por time_id dentro de um racha em modo torneio.

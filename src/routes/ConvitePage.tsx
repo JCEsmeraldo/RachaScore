@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 
@@ -7,6 +7,8 @@ const CHAVE_CONVITE_PENDENTE = 'convite_pendente'
 
 export function ConvitePage() {
   const { token } = useParams<{ token: string }>()
+  const [searchParams] = useSearchParams()
+  const rachaId = searchParams.get('racha')
   const { session, loading: loadingAuth } = useAuth()
   const navigate = useNavigate()
 
@@ -49,11 +51,13 @@ export function ConvitePage() {
     }
 
     localStorage.removeItem(CHAVE_CONVITE_PENDENTE)
-    navigate(`/grupos/${data}`)
+    navigate(rachaId ? `/grupos/${data}/rachas/${rachaId}/presenca` : `/grupos/${data}`)
   }
 
   function handleIrParaLogin() {
-    localStorage.setItem(CHAVE_CONVITE_PENDENTE, token ?? '')
+    if (token) {
+      localStorage.setItem(CHAVE_CONVITE_PENDENTE, rachaId ? `${token}?racha=${rachaId}` : token)
+    }
     navigate('/login')
   }
 
@@ -68,6 +72,7 @@ export function ConvitePage() {
           <>
             <p className="text-neutral-400">Você foi convidado pro grupo</p>
             <h1 className="text-xl font-semibold">{grupoNome}</h1>
+            {rachaId && <p className="text-sm text-neutral-500">Confirme sua presença no racha</p>}
 
             {session ? (
               <button
@@ -75,7 +80,7 @@ export function ConvitePage() {
                 disabled={entrando}
                 className="w-full rounded-lg bg-emerald-500 py-2 font-medium text-neutral-950 disabled:opacity-50"
               >
-                {entrando ? 'Entrando...' : 'Entrar no grupo'}
+                {entrando ? 'Entrando...' : rachaId ? 'Entrar e confirmar presença' : 'Entrar no grupo'}
               </button>
             ) : (
               <div className="space-y-2">

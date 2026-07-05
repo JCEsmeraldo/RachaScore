@@ -211,7 +211,10 @@ export function MembrosPage() {
                 key={membro.jogador_id}
                 className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3"
               >
-                <span>
+                <Link
+                  to={`/grupos/${grupoId}/jogadores/${membro.jogador_id}`}
+                  className="hover:text-emerald-400"
+                >
                   {membro.jogadores?.nome ?? '(sem nome)'}
                   {membro.is_admin && (
                     <span className="ml-2 text-xs text-emerald-400">admin</span>
@@ -221,7 +224,7 @@ export function MembrosPage() {
                       convite pendente ({membro.jogadores.email})
                     </span>
                   )}
-                </span>
+                </Link>
                 {souOrganizador && membro.jogadores?.user_id !== grupo?.dono_id && (
                   <div className="flex gap-3">
                     <button

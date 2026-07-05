@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
+import { compartilhar, gerarTextoCompartilhar } from '../lib/compartilhar'
 import type { ConfigFutebol, ConfigVolei, PresencaComJogador, Racha } from '../lib/types'
 
 function resumoConfig(racha: Racha) {
@@ -13,34 +14,6 @@ function resumoConfig(racha: Racha) {
   }
   const c = racha.config as ConfigVolei
   return `${c.num_sets} sets até ${c.pontos_set}`
-}
-
-function gerarTextoCompartilhar(racha: Racha, confirmados: PresencaComJogador[], espera: PresencaComJogador[]) {
-  const emoji = racha.modalidade === 'volei' ? '🏐' : '⚽'
-  const linhas = [
-    `${emoji} ${racha.modalidade === 'volei' ? 'Vôlei' : 'Futebol'} — ${racha.modo === 'torneio' ? 'Torneio' : 'Jogo rápido'}`,
-    `📅 ${new Date(racha.data_hora).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}`,
-  ]
-
-  if (racha.local) linhas.push(`📍 ${racha.local}`)
-
-  linhas.push('')
-  linhas.push(
-    `Confirmados (${confirmados.length}${racha.limite_jogadores ? `/${racha.limite_jogadores}` : ''}):`,
-  )
-  linhas.push(
-    ...(confirmados.length > 0
-      ? confirmados.map((p, i) => `${i + 1}. ${p.jogadores?.nome ?? '(sem nome)'}`)
-      : ['(ninguém confirmado ainda)']),
-  )
-
-  if (espera.length > 0) {
-    linhas.push('')
-    linhas.push('Na fila de espera:')
-    linhas.push(...espera.map((p, i) => `${i + 1}. ${p.jogadores?.nome ?? '(sem nome)'}`))
-  }
-
-  return linhas.join('\n')
 }
 
 export function RachaDetailPage() {
@@ -109,13 +82,17 @@ export function RachaDetailPage() {
     if (!rachaId || !racha) return
     setErro(null)
 
-    const { data: presencasData, error: erroPresencas } = await supabase
-      .from('presencas_racha')
-      .select('jogador_id, status, time_id, pediu_vaga_em, jogadores(id, nome, user_id, email, created_at)')
-      .eq('racha_id', rachaId)
+    const [{ data: presencasData, error: erroPresencas }, { data: grupoData, error: erroGrupo }] =
+      await Promise.all([
+        supabase
+          .from('presencas_racha')
+          .select('jogador_id, status, time_id, pediu_vaga_em, jogadores(id, nome, user_id, email, created_at)')
+          .eq('racha_id', rachaId),
+        supabase.from('grupos').select('convite_token').eq('id', racha.grupo_id).single(),
+      ])
 
-    if (erroPresencas) {
-      setErro(erroPresencas.message)
+    if (erroPresencas || erroGrupo) {
+      setErro(erroPresencas?.message ?? erroGrupo?.message ?? 'Erro ao gerar compartilhamento')
       return
     }
 
@@ -125,23 +102,21 @@ export function RachaDetailPage() {
       .filter((p) => p.status === 'espera')
       .sort((a, b) => a.pediu_vaga_em.localeCompare(b.pediu_vaga_em))
 
-    const texto = gerarTextoCompartilhar(racha, confirmados, espera)
+    const linkConvite = grupoData
+      ? `${window.location.origin}${import.meta.env.BASE_URL}convite/${grupoData.convite_token}?racha=${rachaId}`
+      : null
 
-    if (navigator.share) {
-      try {
-        await navigator.share({ text: texto })
-      } catch {
-        // usuário cancelou o share, não faz nada
-      }
+    const texto = gerarTextoCompartilhar(racha, confirmados, espera, linkConvite)
+    const resultado = await compartilhar(texto)
+
+    if (resultado.erro) {
+      setErro(resultado.erro)
       return
     }
 
-    try {
-      await navigator.clipboard.writeText(texto)
+    if (resultado.copiado) {
       setCopiado(true)
       setTimeout(() => setCopiado(false), 2000)
-    } catch {
-      setErro('Não foi possível copiar. Copia manual: ' + texto)
     }
   }
 
@@ -212,6 +187,13 @@ export function RachaDetailPage() {
               >
                 <span className="font-medium">Partidas</span>
                 <span className="text-sm text-neutral-500">{totalPartidas}</span>
+              </Link>
+
+              <Link
+                to={`/grupos/${grupoId}/rachas/${rachaId}/estatisticas`}
+                className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-4 hover:border-neutral-700"
+              >
+                <span className="font-medium">Estatísticas</span>
               </Link>
             </div>
           </>

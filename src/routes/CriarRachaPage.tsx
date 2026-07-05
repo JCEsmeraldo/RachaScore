@@ -88,7 +88,10 @@ export function CriarRachaPage() {
                 <button
                   key={m}
                   type="button"
-                  onClick={() => setModalidade(m)}
+                  onClick={() => {
+                    setModalidade(m)
+                    setTamanhoEquipe(m === 'volei' ? 2 : 5)
+                  }}
                   className={`flex-1 rounded-lg border px-3 py-2 text-sm capitalize ${
                     modalidade === m
                       ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400'

@@ -2,16 +2,8 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useSouOrganizador } from '../lib/useSouOrganizador'
+import { sortearTimes } from '../lib/sortearTimes'
 import type { PresencaComJogador, Racha, Time } from '../lib/types'
-
-function embaralhar<T>(lista: T[]): T[] {
-  const copia = [...lista]
-  for (let i = copia.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[copia[i], copia[j]] = [copia[j], copia[i]]
-  }
-  return copia
-}
 
 export function TimesPage() {
   const { grupoId, rachaId } = useParams<{ grupoId: string; rachaId: string }>()
@@ -59,60 +51,18 @@ export function TimesPage() {
   async function handleSortear() {
     if (!rachaId || !racha) return
 
-    const confirmados = presencas.map((p) => p.jogador_id)
-    const numTimes = Math.floor(confirmados.length / racha.tamanho_equipe)
-
-    if (numTimes < 2) {
-      setErro(
-        `Precisa de pelo menos ${racha.tamanho_equipe * 2} confirmados pra sortear 2 times (times de ${racha.tamanho_equipe})`,
-      )
-      return
-    }
-
     setSorteando(true)
     setErro(null)
 
-    await supabase.from('presencas_racha').update({ time_id: null }).eq('racha_id', rachaId)
-    await supabase.from('times').delete().eq('racha_id', rachaId)
+    const confirmados = presencas.map((p) => p.jogador_id)
+    const { erro: erroSorteio } = await sortearTimes(rachaId, racha, confirmados, times)
 
-    const { data: novosTimes, error: erroTimes } = await supabase
-      .from('times')
-      .insert(Array.from({ length: numTimes }, (_, i) => ({ racha_id: rachaId, nome: `Time ${i + 1}` })))
-      .select()
-
-    if (erroTimes || !novosTimes) {
-      setSorteando(false)
-      setErro(erroTimes?.message ?? 'Erro ao criar times')
+    setSorteando(false)
+    if (erroSorteio) {
+      setErro(erroSorteio)
       return
     }
 
-    const sorteados = embaralhar(confirmados)
-    const gruposDeTimes: string[][] = Array.from({ length: numTimes }, () => [])
-
-    if (racha.modo === 'torneio') {
-      sorteados.forEach((jogadorId, i) => {
-        gruposDeTimes[i % numTimes].push(jogadorId)
-      })
-    } else {
-      sorteados.slice(0, numTimes * racha.tamanho_equipe).forEach((jogadorId, i) => {
-        gruposDeTimes[Math.floor(i / racha.tamanho_equipe)].push(jogadorId)
-      })
-    }
-
-    for (let i = 0; i < numTimes; i++) {
-      const { error } = await supabase
-        .from('presencas_racha')
-        .update({ time_id: novosTimes[i].id })
-        .eq('racha_id', rachaId)
-        .in('jogador_id', gruposDeTimes[i])
-
-      if (error) {
-        setErro(error.message)
-        break
-      }
-    }
-
-    setSorteando(false)
     carregar()
   }
 
@@ -134,7 +84,26 @@ export function TimesPage() {
     carregar()
   }
 
+  async function handleApagarTime(timeId: string) {
+    if (!rachaId) return
+    if (!confirm('Apagar esse time?')) return
+    setErro(null)
+
+    await supabase.from('presencas_racha').update({ time_id: null }).eq('racha_id', rachaId).eq('time_id', timeId)
+
+    const { error } = await supabase.from('times').delete().eq('id', timeId)
+
+    if (error) {
+      setErro('Esse time já foi usado numa partida e não pode ser apagado')
+      return
+    }
+
+    carregar()
+  }
+
   const semTime = presencas.filter((p) => !p.time_id)
+  const timesSorteio = times.filter((t) => t.sorteio)
+  const timesPersonalizados = times.filter((t) => !t.sorteio)
 
   return (
     <div className="min-h-svh bg-neutral-950 px-4 py-6 text-white">
@@ -167,35 +136,84 @@ export function TimesPage() {
         ) : times.length === 0 ? (
           <p className="text-sm text-neutral-500">Times ainda não sorteados.</p>
         ) : (
-          <div className="space-y-3">
-            {times.map((time) => (
-              <div key={time.id} className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
-                <h3 className="mb-2 text-sm font-medium">{time.nome}</h3>
-                <ul className="space-y-1">
-                  {presencas
-                    .filter((p) => p.time_id === time.id)
-                    .map((p) => (
-                      <li key={p.jogador_id} className="flex items-center justify-between text-sm">
-                        <span>{p.jogadores?.nome}</span>
-                        {souOrganizador && (
-                          <select
-                            value={time.id}
-                            onChange={(e) => handleMoverJogador(p.jogador_id, e.target.value || null)}
-                            className="rounded border border-neutral-700 bg-neutral-800 px-1 py-0.5 text-xs"
-                          >
-                            {times.map((t) => (
-                              <option key={t.id} value={t.id}>
-                                {t.nome}
-                              </option>
-                            ))}
-                            <option value="">Fora</option>
-                          </select>
-                        )}
-                      </li>
-                    ))}
-                </ul>
+          <div className="space-y-6">
+            {timesSorteio.length > 0 && (
+              <div className="space-y-3">
+                <h2 className="text-sm font-medium text-neutral-400">Sorteio</h2>
+                {timesSorteio.map((time) => (
+                  <div key={time.id} className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
+                    <h3 className="mb-2 text-sm font-medium">{time.nome}</h3>
+                    <ul className="space-y-1">
+                      {presencas
+                        .filter((p) => p.time_id === time.id)
+                        .map((p) => (
+                          <li key={p.jogador_id} className="flex items-center justify-between text-sm">
+                            <span>{p.jogadores?.nome}</span>
+                            {souOrganizador && (
+                              <select
+                                value={time.id}
+                                onChange={(e) => handleMoverJogador(p.jogador_id, e.target.value || null)}
+                                className="rounded border border-neutral-700 bg-neutral-800 px-1 py-0.5 text-xs"
+                              >
+                                {times.map((t) => (
+                                  <option key={t.id} value={t.id}>
+                                    {t.nome}
+                                  </option>
+                                ))}
+                                <option value="">Fora</option>
+                              </select>
+                            )}
+                          </li>
+                        ))}
+                    </ul>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
+
+            {timesPersonalizados.length > 0 && (
+              <div className="space-y-3">
+                <h2 className="text-sm font-medium text-neutral-400">Times personalizados</h2>
+                {timesPersonalizados.map((time) => (
+                  <div key={time.id} className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
+                    <div className="mb-2 flex items-center justify-between">
+                      <h3 className="text-sm font-medium">{time.nome}</h3>
+                      {souOrganizador && (
+                        <button
+                          onClick={() => handleApagarTime(time.id)}
+                          className="text-xs text-red-400 hover:text-red-300"
+                        >
+                          Apagar
+                        </button>
+                      )}
+                    </div>
+                    <ul className="space-y-1">
+                      {presencas
+                        .filter((p) => p.time_id === time.id)
+                        .map((p) => (
+                          <li key={p.jogador_id} className="flex items-center justify-between text-sm">
+                            <span>{p.jogadores?.nome}</span>
+                            {souOrganizador && (
+                              <select
+                                value={time.id}
+                                onChange={(e) => handleMoverJogador(p.jogador_id, e.target.value || null)}
+                                className="rounded border border-neutral-700 bg-neutral-800 px-1 py-0.5 text-xs"
+                              >
+                                {times.map((t) => (
+                                  <option key={t.id} value={t.id}>
+                                    {t.nome}
+                                  </option>
+                                ))}
+                                <option value="">Fora</option>
+                              </select>
+                            )}
+                          </li>
+                        ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {semTime.length > 0 && (
               <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">

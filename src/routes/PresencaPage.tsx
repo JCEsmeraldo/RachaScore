@@ -3,38 +3,48 @@ import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import { useSouOrganizador } from '../lib/useSouOrganizador'
-import type { MembroComJogador, PresencaComJogador } from '../lib/types'
+import { compartilhar, gerarTextoCompartilhar } from '../lib/compartilhar'
+import type { MembroComJogador, PresencaComJogador, Racha } from '../lib/types'
 
 export function PresencaPage() {
   const { grupoId, rachaId } = useParams<{ grupoId: string; rachaId: string }>()
   const { session } = useAuth()
   const souOrganizador = useSouOrganizador(grupoId)
 
+  const [racha, setRacha] = useState<Racha | null>(null)
   const [presencas, setPresencas] = useState<PresencaComJogador[]>([])
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
+  const [copiado, setCopiado] = useState(false)
+  const [mostrarCompartilhar, setMostrarCompartilhar] = useState(false)
 
   async function carregar() {
     if (!rachaId || !grupoId) return
     setLoading(true)
 
-    const [{ data: membrosData, error: erroMembros }, { data: presencasData, error: erroPresencas }] =
-      await Promise.all([
-        supabase
-          .from('membros_grupo')
-          .select('jogador_id, is_admin, jogadores(id, nome, user_id, email, created_at)')
-          .eq('grupo_id', grupoId),
-        supabase
-          .from('presencas_racha')
-          .select('jogador_id, status, time_id, pediu_vaga_em, jogadores(id, nome, user_id, email, created_at)')
-          .eq('racha_id', rachaId),
-      ])
+    const [
+      { data: rachaData },
+      { data: membrosData, error: erroMembros },
+      { data: presencasData, error: erroPresencas },
+    ] = await Promise.all([
+      supabase.from('rachas').select('*').eq('id', rachaId).single(),
+      supabase
+        .from('membros_grupo')
+        .select('jogador_id, is_admin, jogadores(id, nome, user_id, email, created_at)')
+        .eq('grupo_id', grupoId),
+      supabase
+        .from('presencas_racha')
+        .select('jogador_id, status, time_id, pediu_vaga_em, jogadores(id, nome, user_id, email, created_at)')
+        .eq('racha_id', rachaId),
+    ])
 
     if (erroMembros || erroPresencas) {
       setErro(erroMembros?.message ?? erroPresencas?.message ?? 'Erro ao carregar presença')
       setLoading(false)
       return
     }
+
+    setRacha(rachaData)
 
     const membros = (membrosData ?? []) as unknown as MembroComJogador[]
     const existentes = (presencasData ?? []) as unknown as PresencaComJogador[]
@@ -76,7 +86,44 @@ export function PresencaPage() {
       return
     }
 
+    // convida a compartilhar só quando a própria pessoa confirma a própria presença
+    const ehProprioJogador = presencas.find((p) => p.jogador_id === jogadorId)?.jogadores?.user_id === session?.user.id
+    if (querJogar && ehProprioJogador) {
+      setMostrarCompartilhar(true)
+    }
+
     carregar()
+  }
+
+  async function handleCompartilharLista() {
+    if (!rachaId || !racha) return
+    setErro(null)
+
+    const { data: grupoData } = await supabase.from('grupos').select('convite_token').eq('id', racha.grupo_id).single()
+
+    const confirmados = presencas.filter((p) => p.status === 'confirmado')
+    const espera = presencas
+      .filter((p) => p.status === 'espera')
+      .sort((a, b) => a.pediu_vaga_em.localeCompare(b.pediu_vaga_em))
+
+    const linkConvite = grupoData
+      ? `${window.location.origin}${import.meta.env.BASE_URL}convite/${grupoData.convite_token}?racha=${rachaId}`
+      : null
+
+    const texto = gerarTextoCompartilhar(racha, confirmados, espera, linkConvite)
+    const resultado = await compartilhar(texto)
+
+    if (resultado.erro) {
+      setErro(resultado.erro)
+      return
+    }
+
+    if (resultado.copiado) {
+      setCopiado(true)
+      setTimeout(() => setCopiado(false), 2000)
+    }
+
+    setMostrarCompartilhar(false)
   }
 
   const confirmados = presencas.filter((p) => p.status === 'confirmado')
@@ -99,6 +146,18 @@ export function PresencaPage() {
             {espera.length > 0 && ` · ${espera.length} na espera`}
           </h1>
         </header>
+
+        {mostrarCompartilhar && (
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-emerald-500/40 bg-emerald-500/5 px-4 py-3">
+            <p className="text-sm text-emerald-400">Presença confirmada! Atualiza a lista no grupo do WhatsApp?</p>
+            <button
+              onClick={handleCompartilharLista}
+              className="shrink-0 rounded-lg bg-emerald-500 px-3 py-1.5 text-sm font-medium text-neutral-950"
+            >
+              {copiado ? 'Copiado!' : 'Compartilhar'}
+            </button>
+          </div>
+        )}
 
         {erro && <p className="text-sm text-red-400">{erro}</p>}
 

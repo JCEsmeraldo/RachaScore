@@ -1,45 +1,89 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useSouOrganizador } from '../lib/useSouOrganizador'
-import type { Partida, Time } from '../lib/types'
+import { sortearTimes } from '../lib/sortearTimes'
+import type { Partida, PresencaComJogador, Racha, Time } from '../lib/types'
 
 export function PartidasPage() {
   const { grupoId, rachaId } = useParams<{ grupoId: string; rachaId: string }>()
+  const navigate = useNavigate()
   const souOrganizador = useSouOrganizador(grupoId)
 
+  const [racha, setRacha] = useState<Racha | null>(null)
+  const [presencas, setPresencas] = useState<PresencaComJogador[]>([])
   const [times, setTimes] = useState<Time[]>([])
   const [partidas, setPartidas] = useState<Partida[]>([])
   const [loading, setLoading] = useState(true)
+  const [sorteando, setSorteando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
 
-  useEffect(() => {
-    async function carregar() {
-      if (!rachaId) return
-      setLoading(true)
+  async function carregar() {
+    if (!rachaId) return
+    setLoading(true)
 
-      const [{ data: timesData, error: erroTimes }, { data: partidasData, error: erroPartidas }] =
-        await Promise.all([
-          supabase.from('times').select('*').eq('racha_id', rachaId),
-          supabase
-            .from('partidas')
-            .select('*')
-            .eq('racha_id', rachaId)
-            .order('created_at', { ascending: true }),
-        ])
+    const [
+      { data: rachaData },
+      { data: presencasData },
+      { data: timesData, error: erroTimes },
+      { data: partidasData, error: erroPartidas },
+    ] = await Promise.all([
+      supabase.from('rachas').select('*').eq('id', rachaId).single(),
+      supabase
+        .from('presencas_racha')
+        .select('jogador_id, status, time_id, pediu_vaga_em, jogadores(id, nome, user_id, email, created_at)')
+        .eq('racha_id', rachaId)
+        .eq('status', 'confirmado'),
+      supabase.from('times').select('*').eq('racha_id', rachaId),
+      supabase.from('partidas').select('*').eq('racha_id', rachaId).order('created_at', { ascending: true }),
+    ])
 
-      if (erroTimes || erroPartidas) {
-        setErro(erroTimes?.message ?? erroPartidas?.message ?? 'Erro ao carregar partidas')
-      } else {
-        setTimes(timesData ?? [])
-        setPartidas(partidasData ?? [])
-      }
+    setRacha(rachaData)
+    setPresencas((presencasData ?? []) as unknown as PresencaComJogador[])
 
-      setLoading(false)
+    if (erroTimes || erroPartidas) {
+      setErro(erroTimes?.message ?? erroPartidas?.message ?? 'Erro ao carregar partidas')
+    } else {
+      setTimes(timesData ?? [])
+      setPartidas(partidasData ?? [])
     }
 
+    setLoading(false)
+  }
+
+  useEffect(() => {
     carregar()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rachaId])
+
+  async function handleNovaPartida() {
+    if (!rachaId || !racha) return
+
+    // só pula o sorteio se já existe pool de times COM jogador vinculado agora —
+    // times órfãos (de partidas antigas, sem ninguém current) não contam
+    const idsComJogador = new Set(presencas.map((p) => p.time_id).filter(Boolean))
+    const timesAtivos = times.filter((t) => idsComJogador.has(t.id))
+
+    if (timesAtivos.length >= 2) {
+      navigate(`/grupos/${grupoId}/rachas/${rachaId}/partidas/nova`)
+      return
+    }
+
+    setSorteando(true)
+    setErro(null)
+
+    const confirmados = presencas.map((p) => p.jogador_id)
+    const { erro: erroSorteio } = await sortearTimes(rachaId, racha, confirmados, times)
+
+    setSorteando(false)
+
+    if (erroSorteio) {
+      setErro(erroSorteio)
+      return
+    }
+
+    navigate(`/grupos/${grupoId}/rachas/${rachaId}/partidas/nova`)
+  }
 
   return (
     <div className="min-h-svh bg-neutral-950 px-4 py-6 text-white">
@@ -54,13 +98,14 @@ export function PartidasPage() {
             </Link>
             <h1 className="text-xl font-semibold">Partidas</h1>
           </div>
-          {souOrganizador && times.length >= 2 && (
-            <Link
-              to={`/grupos/${grupoId}/rachas/${rachaId}/partidas/nova`}
-              className="text-sm text-emerald-400 hover:text-emerald-300"
+          {souOrganizador && (
+            <button
+              onClick={handleNovaPartida}
+              disabled={sorteando}
+              className="text-sm text-emerald-400 hover:text-emerald-300 disabled:opacity-50"
             >
-              + Nova partida
-            </Link>
+              {sorteando ? 'Sorteando...' : '+ Nova partida'}
+            </button>
           )}
         </header>
 

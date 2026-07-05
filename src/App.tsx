@@ -12,6 +12,9 @@ import { TimesPage } from './routes/TimesPage'
 import { PartidasPage } from './routes/PartidasPage'
 import { CriarPartidaPage } from './routes/CriarPartidaPage'
 import { PartidaDetailPage } from './routes/PartidaDetailPage'
+import { EstatisticasRachaPage } from './routes/EstatisticasRachaPage'
+import { EstatisticasGrupoPage } from './routes/EstatisticasGrupoPage'
+import { JogadorDetailPage } from './routes/JogadorDetailPage'
 import { ProtectedRoute } from './routes/ProtectedRoute'
 
 function App() {
@@ -23,6 +26,8 @@ function App() {
         <Route path="/" element={<GruposPage />} />
         <Route path="/grupos/:grupoId" element={<GrupoDetailPage />} />
         <Route path="/grupos/:grupoId/membros" element={<MembrosPage />} />
+        <Route path="/grupos/:grupoId/jogadores/:jogadorId" element={<JogadorDetailPage />} />
+        <Route path="/grupos/:grupoId/estatisticas" element={<EstatisticasGrupoPage />} />
         <Route path="/grupos/:grupoId/rachas" element={<RachasPage />} />
         <Route path="/grupos/:grupoId/rachas/novo" element={<CriarRachaPage />} />
         <Route path="/grupos/:grupoId/rachas/:rachaId" element={<RachaDetailPage />} />
@@ -33,6 +38,10 @@ function App() {
         <Route
           path="/grupos/:grupoId/rachas/:rachaId/partidas/:partidaId"
           element={<PartidaDetailPage />}
+        />
+        <Route
+          path="/grupos/:grupoId/rachas/:rachaId/estatisticas"
+          element={<EstatisticasRachaPage />}
         />
       </Route>
     </Routes>

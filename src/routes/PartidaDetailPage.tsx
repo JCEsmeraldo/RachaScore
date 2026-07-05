@@ -2,7 +2,16 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
-import type { ConfigVolei, MotivoPonto, Partida, Racha, SetPartida, Time } from '../lib/types'
+import type {
+  ConfigFutebol,
+  ConfigVolei,
+  EscalacaoComJogador,
+  MotivoPonto,
+  Partida,
+  Racha,
+  SetPartida,
+  Time,
+} from '../lib/types'
 
 type JogadorTime = { jogador_id: string; nome: string }
 
@@ -12,6 +21,23 @@ const MOTIVOS: { valor: MotivoPonto; label: string }[] = [
   { valor: 'saque', label: 'Saque' },
   { valor: 'outro', label: 'Outro' },
 ]
+
+function formatarCronometro(segundos: number) {
+  const m = Math.floor(segundos / 60)
+    .toString()
+    .padStart(2, '0')
+  const s = (segundos % 60).toString().padStart(2, '0')
+  return `${m}:${s}`
+}
+
+// segundos acumulados + tempo real decorrido desde a última atualização, se rodando
+function segundosAoVivo(partida: Partida, agora: number) {
+  if (!partida.cronometro_rodando || !partida.cronometro_atualizado_em) {
+    return partida.cronometro_segundos
+  }
+  const decorrido = Math.floor((agora - new Date(partida.cronometro_atualizado_em).getTime()) / 1000)
+  return partida.cronometro_segundos + Math.max(decorrido, 0)
+}
 
 export function PartidaDetailPage() {
   const { grupoId, rachaId, partidaId } = useParams<{
@@ -33,6 +59,7 @@ export function PartidaDetailPage() {
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
   const [expandido, setExpandido] = useState<string | null>(null)
+  const [agora, setAgora] = useState(() => Date.now())
 
   async function carregar() {
     if (!partidaId || !rachaId) return
@@ -63,6 +90,7 @@ export function PartidaDetailPage() {
       { data: presencasAData },
       { data: presencasBData },
       { data: setsData },
+      { data: escalacaoData },
     ] = await Promise.all([
       supabase.from('grupos').select('*').eq('id', rachaData.grupo_id).single(),
       supabase
@@ -84,16 +112,36 @@ export function PartidaDetailPage() {
         .eq('time_id', partidaData.time_b_id)
         .eq('status', 'confirmado'),
       supabase.from('sets').select('*').eq('partida_id', partidaId).order('numero', { ascending: true }),
+      supabase
+        .from('escalacoes_partida')
+        .select('jogador_id, time_id, jogadores(nome)')
+        .eq('partida_id', partidaId),
     ])
 
     setTimeA(timeAData)
     setTimeB(timeBData)
-    setJogadoresA(
-      (presencasAData ?? []).map((p: any) => ({ jogador_id: p.jogador_id, nome: p.jogadores?.nome ?? '?' })),
-    )
-    setJogadoresB(
-      (presencasBData ?? []).map((p: any) => ({ jogador_id: p.jogador_id, nome: p.jogadores?.nome ?? '?' })),
-    )
+
+    const escalacao = (escalacaoData ?? []) as unknown as EscalacaoComJogador[]
+
+    if (escalacao.length > 0) {
+      setJogadoresA(
+        escalacao
+          .filter((e) => e.time_id === partidaData.time_a_id)
+          .map((e) => ({ jogador_id: e.jogador_id, nome: e.jogadores?.nome ?? '?' })),
+      )
+      setJogadoresB(
+        escalacao
+          .filter((e) => e.time_id === partidaData.time_b_id)
+          .map((e) => ({ jogador_id: e.jogador_id, nome: e.jogadores?.nome ?? '?' })),
+      )
+    } else {
+      setJogadoresA(
+        (presencasAData ?? []).map((p: any) => ({ jogador_id: p.jogador_id, nome: p.jogadores?.nome ?? '?' })),
+      )
+      setJogadoresB(
+        (presencasBData ?? []).map((p: any) => ({ jogador_id: p.jogador_id, nome: p.jogadores?.nome ?? '?' })),
+      )
+    }
 
     if (setsData) {
       const abertos = setsData.filter((s) => !s.vencedor_id)
@@ -114,6 +162,37 @@ export function PartidaDetailPage() {
     carregar()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [partidaId, rachaId])
+
+  // sincroniza com outros dispositivos vendo a mesma partida (placar, cronômetro, sets)
+  useEffect(() => {
+    if (!partidaId) return
+
+    const canal = supabase
+      .channel(`partida-${partidaId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'partidas', filter: `id=eq.${partidaId}` },
+        () => carregar(),
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'sets', filter: `partida_id=eq.${partidaId}` },
+        () => carregar(),
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(canal)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [partidaId])
+
+  // tique local só pra atualizar o mostrador — não escreve no banco a cada segundo
+  useEffect(() => {
+    if (!partida?.cronometro_rodando) return
+    const id = window.setInterval(() => setAgora(Date.now()), 1000)
+    return () => window.clearInterval(id)
+  }, [partida?.cronometro_rodando])
 
   function handleClicarJogador(jogadorId: string) {
     setExpandido((atual) => (atual === jogadorId ? null : jogadorId))
@@ -222,6 +301,37 @@ export function PartidaDetailPage() {
     carregar()
   }
 
+  async function handleIniciarPausarCronometro() {
+    if (!partida) return
+
+    if (partida.cronometro_rodando) {
+      // pausar: consolida o tempo decorrido em cronometro_segundos
+      const segundos = segundosAoVivo(partida, Date.now())
+      await supabase
+        .from('partidas')
+        .update({ cronometro_segundos: segundos, cronometro_rodando: false, cronometro_atualizado_em: new Date().toISOString() })
+        .eq('id', partida.id)
+    } else {
+      await supabase
+        .from('partidas')
+        .update({ cronometro_rodando: true, cronometro_atualizado_em: new Date().toISOString() })
+        .eq('id', partida.id)
+    }
+
+    carregar()
+  }
+
+  async function handleZerarCronometro() {
+    if (!partida) return
+
+    await supabase
+      .from('partidas')
+      .update({ cronometro_segundos: 0, cronometro_rodando: false, cronometro_atualizado_em: new Date().toISOString() })
+      .eq('id', partida.id)
+
+    carregar()
+  }
+
   if (loading) {
     return <div className="min-h-svh bg-neutral-950 px-4 py-6 text-white">Carregando...</div>
   }
@@ -238,6 +348,7 @@ export function PartidaDetailPage() {
   const placarA = ehVolei ? (setAtual?.placar_a ?? 0) : partida.placar_a
   const placarB = ehVolei ? (setAtual?.placar_b ?? 0) : partida.placar_b
   const finalizada = partida.status === 'finalizada'
+  const cronometroSegundos = segundosAoVivo(partida, agora)
 
   return (
     <div className="min-h-svh bg-neutral-950 px-4 py-6 text-white">
@@ -259,6 +370,40 @@ export function PartidaDetailPage() {
               {setAtual && ` · Set ${setAtual.numero}`}
             </p>
           )}
+
+          {!ehVolei && (() => {
+            const minutos = (racha.config as ConfigFutebol).minutos
+            const limiteSegundos = minutos ? minutos * 60 : null
+            const emAcrescimo = limiteSegundos !== null && cronometroSegundos >= limiteSegundos
+
+            return (
+              <div className="mb-3 space-y-1">
+                <p className={`text-2xl font-mono ${emAcrescimo ? 'text-amber-400' : 'text-neutral-200'}`}>
+                  {formatarCronometro(cronometroSegundos)}
+                  {limiteSegundos !== null && (
+                    <span className="text-sm text-neutral-500"> / {formatarCronometro(limiteSegundos)}</span>
+                  )}
+                </p>
+                {emAcrescimo && <p className="text-xs text-amber-400">Acréscimos</p>}
+                {souOrganizador && !finalizada && (
+                  <div className="flex justify-center gap-2">
+                    <button
+                      onClick={handleIniciarPausarCronometro}
+                      className="rounded-lg border border-neutral-700 px-3 py-1 text-xs text-neutral-300 hover:border-neutral-600"
+                    >
+                      {partida.cronometro_rodando ? 'Pausar' : 'Iniciar'}
+                    </button>
+                    <button
+                      onClick={handleZerarCronometro}
+                      className="rounded-lg border border-neutral-800 px-3 py-1 text-xs text-neutral-500 hover:border-neutral-600"
+                    >
+                      Zerar
+                    </button>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
           <div className="flex items-center justify-center gap-6">
             <div className="flex-1">
               <p className="truncate text-sm text-neutral-400">{timeA.nome}</p>

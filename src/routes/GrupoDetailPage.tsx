@@ -72,6 +72,13 @@ export function GrupoDetailPage() {
             <span className="font-medium">Membros</span>
             <span className="text-sm text-neutral-500">{totalMembros}</span>
           </Link>
+
+          <Link
+            to={`/grupos/${grupoId}/estatisticas`}
+            className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-4 hover:border-neutral-700"
+          >
+            <span className="font-medium">Estatísticas</span>
+          </Link>
         </div>
       </div>
     </div>

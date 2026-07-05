@@ -605,3 +605,27 @@ drop policy if exists "dono lanca ponto (delete)" on eventos_ponto;
 create policy "dono lanca ponto (delete)" on eventos_ponto
   for delete to authenticated
   using (public.is_organizador_grupo(public.grupo_da_partida(partida_id)));
+
+-- ============================================================
+-- escalacoes_partida
+-- ============================================================
+
+drop policy if exists "membros veem escalacoes" on escalacoes_partida;
+create policy "membros veem escalacoes" on escalacoes_partida
+  for select to authenticated
+  using (public.is_membro_grupo(public.grupo_da_partida(partida_id)));
+
+drop policy if exists "dono gerencia escalacoes (insert)" on escalacoes_partida;
+create policy "dono gerencia escalacoes (insert)" on escalacoes_partida
+  for insert to authenticated
+  with check (public.is_organizador_grupo(public.grupo_da_partida(partida_id)));
+
+drop policy if exists "dono gerencia escalacoes (update)" on escalacoes_partida;
+create policy "dono gerencia escalacoes (update)" on escalacoes_partida
+  for update to authenticated
+  using (public.is_organizador_grupo(public.grupo_da_partida(partida_id)));
+
+drop policy if exists "dono gerencia escalacoes (delete)" on escalacoes_partida;
+create policy "dono gerencia escalacoes (delete)" on escalacoes_partida
+  for delete to authenticated
+  using (public.is_organizador_grupo(public.grupo_da_partida(partida_id)));

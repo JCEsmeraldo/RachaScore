@@ -92,6 +92,16 @@ export type SetPartida = {
 
 export type MotivoPonto = 'ataque' | 'bloqueio' | 'saque' | 'erro_adversario' | 'outro'
 
+export type TipoCartao = 'amarelo' | 'vermelho'
+
+export type Cartao = {
+  id: string
+  partida_id: string
+  jogador_id: string
+  tipo: TipoCartao
+  created_at: string
+}
+
 export type EscalacaoComJogador = {
   jogador_id: string
   time_id: string

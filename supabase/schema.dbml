@@ -103,8 +103,19 @@ Table eventos_ponto {
   set_id uuid [note: 'só vôlei']
   time_id uuid [not null, note: 'time que ganhou o ponto']
   jogador_id uuid [note: 'opcional - nem todo ponto tem autor (ex: erro adversário)']
+  assistencia_jogador_id uuid [note: 'opcional, só futebol']
   motivo motivo_enum
   created_at timestamptz [not null, default: `now()`]
+}
+
+Table cartoes {
+  id uuid [pk, default: `gen_random_uuid()`]
+  partida_id uuid [not null]
+  jogador_id uuid [not null]
+  tipo cartao_enum [not null]
+  created_at timestamptz [not null, default: `now()`]
+
+  note: 'só futebol — registro avulso, não afeta placar nem escalação'
 }
 
 Table escalacoes_partida {
@@ -172,6 +183,11 @@ enum motivo_enum {
   outro
 }
 
+enum cartao_enum {
+  amarelo
+  vermelho
+}
+
 Ref: grupos.dono_id > profiles.id
 Ref: jogadores.user_id > profiles.id
 Ref: membros_grupo.grupo_id > grupos.id
@@ -191,6 +207,9 @@ Ref: eventos_ponto.partida_id > partidas.id
 Ref: eventos_ponto.set_id > sets.id
 Ref: eventos_ponto.time_id > times.id
 Ref: eventos_ponto.jogador_id > jogadores.id
+Ref: eventos_ponto.assistencia_jogador_id > jogadores.id
+Ref: cartoes.partida_id > partidas.id
+Ref: cartoes.jogador_id > jogadores.id
 Ref: escalacoes_partida.partida_id > partidas.id
 Ref: escalacoes_partida.jogador_id > jogadores.id
 Ref: escalacoes_partida.time_id > times.id

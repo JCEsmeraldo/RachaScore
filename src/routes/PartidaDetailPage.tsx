@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import type {
+  Cartao,
   ConfigFutebol,
   ConfigVolei,
   EscalacaoComJogador,
@@ -10,6 +11,7 @@ import type {
   Partida,
   Racha,
   SetPartida,
+  TipoCartao,
   Time,
 } from '../lib/types'
 
@@ -60,6 +62,7 @@ export function PartidaDetailPage() {
   const [erro, setErro] = useState<string | null>(null)
   const [expandido, setExpandido] = useState<string | null>(null)
   const [agora, setAgora] = useState(() => Date.now())
+  const [cartoes, setCartoes] = useState<Cartao[]>([])
 
   async function carregar() {
     if (!partidaId || !rachaId) return
@@ -91,6 +94,7 @@ export function PartidaDetailPage() {
       { data: presencasBData },
       { data: setsData },
       { data: escalacaoData },
+      { data: cartoesData },
     ] = await Promise.all([
       supabase.from('grupos').select('*').eq('id', rachaData.grupo_id).single(),
       supabase
@@ -116,10 +120,12 @@ export function PartidaDetailPage() {
         .from('escalacoes_partida')
         .select('jogador_id, time_id, jogadores(nome)')
         .eq('partida_id', partidaId),
+      supabase.from('cartoes').select('*').eq('partida_id', partidaId),
     ])
 
     setTimeA(timeAData)
     setTimeB(timeBData)
+    setCartoes(cartoesData ?? [])
 
     const escalacao = (escalacaoData ?? []) as unknown as EscalacaoComJogador[]
 
@@ -203,7 +209,17 @@ export function PartidaDetailPage() {
     handlePonto(timeId, jogadorId, motivo)
   }
 
-  async function handlePonto(timeId: string, jogadorId: string | null, motivo: MotivoPonto | null) {
+  function handleEscolherAssistencia(timeId: string, jogadorId: string, assistenciaJogadorId: string | null) {
+    setExpandido(null)
+    handlePonto(timeId, jogadorId, null, assistenciaJogadorId)
+  }
+
+  async function handlePonto(
+    timeId: string,
+    jogadorId: string | null,
+    motivo: MotivoPonto | null,
+    assistenciaJogadorId: string | null = null,
+  ) {
     if (!partidaId || !partida || !racha) return
     setErro(null)
 
@@ -215,6 +231,7 @@ export function PartidaDetailPage() {
       set_id: ehVolei ? setAtual?.id ?? null : null,
       time_id: timeId,
       jogador_id: jogadorId,
+      assistencia_jogador_id: assistenciaJogadorId,
       motivo,
     })
 
@@ -238,6 +255,28 @@ export function PartidaDetailPage() {
     }
 
     carregar()
+  }
+
+  async function handleCartao(jogadorId: string, tipo: TipoCartao) {
+    if (!partidaId) return
+    setErro(null)
+
+    const { error } = await supabase.from('cartoes').insert({ partida_id: partidaId, jogador_id: jogadorId, tipo })
+
+    if (error) {
+      setErro(error.message)
+      return
+    }
+
+    carregar()
+  }
+
+  function cartoesDoJogador(jogadorId: string) {
+    const doJogador = cartoes.filter((c) => c.jogador_id === jogadorId)
+    return {
+      amarelo: doJogador.filter((c) => c.tipo === 'amarelo').length,
+      vermelho: doJogador.filter((c) => c.tipo === 'vermelho').length,
+    }
   }
 
   async function handleFecharSet() {
@@ -424,32 +463,81 @@ export function PartidaDetailPage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <h3 className="text-sm font-medium text-neutral-400">{timeA.nome}</h3>
-                {jogadoresA.map((j) => (
-                  <div key={j.jogador_id}>
-                    <button
-                      onClick={() =>
-                        ehVolei ? handleClicarJogador(j.jogador_id) : handlePonto(partida.time_a_id, j.jogador_id, null)
-                      }
-                      className="w-full rounded-lg border border-neutral-700 bg-neutral-900 px-2 py-2 text-sm hover:border-emerald-500"
-                    >
-                      +1 {j.nome}
-                    </button>
-                    {expandido === j.jogador_id && (
-                      <div className="mt-1 flex flex-wrap gap-1 rounded-lg border border-emerald-500/40 bg-emerald-500/5 p-2">
-                        {MOTIVOS.map((m) => (
-                          <button
-                            key={m.valor}
-                            type="button"
-                            onClick={() => handleEscolherMotivo(partida.time_a_id, j.jogador_id, m.valor)}
-                            className="rounded-full bg-neutral-800 px-2 py-1 text-xs text-neutral-200 hover:bg-emerald-500/20 hover:text-emerald-400"
-                          >
-                            {m.label}
-                          </button>
-                        ))}
+                {jogadoresA.map((j) => {
+                  const cartoesJ = cartoesDoJogador(j.jogador_id)
+                  return (
+                    <div key={j.jogador_id}>
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => handleClicarJogador(j.jogador_id)}
+                          className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 px-2 py-2 text-sm hover:border-emerald-500"
+                        >
+                          +1 {j.nome}
+                          {cartoesJ.amarelo > 0 && ` 🟨${cartoesJ.amarelo > 1 ? cartoesJ.amarelo : ''}`}
+                          {cartoesJ.vermelho > 0 && ' 🟥'}
+                        </button>
+                        {!ehVolei && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleCartao(j.jogador_id, 'amarelo')}
+                              title="Cartão amarelo"
+                              className="rounded-lg border border-neutral-800 px-2 text-sm hover:border-amber-400"
+                            >
+                              🟨
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleCartao(j.jogador_id, 'vermelho')}
+                              title="Cartão vermelho"
+                              className="rounded-lg border border-neutral-800 px-2 text-sm hover:border-red-400"
+                            >
+                              🟥
+                            </button>
+                          </>
+                        )}
                       </div>
-                    )}
-                  </div>
-                ))}
+                      {expandido === j.jogador_id && (
+                        <div className="mt-1 flex flex-wrap gap-1 rounded-lg border border-emerald-500/40 bg-emerald-500/5 p-2">
+                          {ehVolei
+                            ? MOTIVOS.map((m) => (
+                                <button
+                                  key={m.valor}
+                                  type="button"
+                                  onClick={() => handleEscolherMotivo(partida.time_a_id, j.jogador_id, m.valor)}
+                                  className="rounded-full bg-neutral-800 px-2 py-1 text-xs text-neutral-200 hover:bg-emerald-500/20 hover:text-emerald-400"
+                                >
+                                  {m.label}
+                                </button>
+                              ))
+                            : (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleEscolherAssistencia(partida.time_a_id, j.jogador_id, null)}
+                                    className="rounded-full bg-neutral-800 px-2 py-1 text-xs text-neutral-400 hover:bg-emerald-500/20 hover:text-emerald-400"
+                                  >
+                                    Sem assistência
+                                  </button>
+                                  {jogadoresA
+                                    .filter((t) => t.jogador_id !== j.jogador_id)
+                                    .map((t) => (
+                                      <button
+                                        key={t.jogador_id}
+                                        type="button"
+                                        onClick={() => handleEscolherAssistencia(partida.time_a_id, j.jogador_id, t.jogador_id)}
+                                        className="rounded-full bg-neutral-800 px-2 py-1 text-xs text-neutral-200 hover:bg-emerald-500/20 hover:text-emerald-400"
+                                      >
+                                        {t.nome}
+                                      </button>
+                                    ))}
+                                </>
+                              )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
                 <button
                   onClick={() => handlePonto(partida.time_a_id, null, null)}
                   className="w-full rounded-lg border border-neutral-800 px-2 py-2 text-xs text-neutral-500 hover:border-neutral-600"
@@ -460,32 +548,81 @@ export function PartidaDetailPage() {
 
               <div className="space-y-2">
                 <h3 className="text-sm font-medium text-neutral-400">{timeB.nome}</h3>
-                {jogadoresB.map((j) => (
-                  <div key={j.jogador_id}>
-                    <button
-                      onClick={() =>
-                        ehVolei ? handleClicarJogador(j.jogador_id) : handlePonto(partida.time_b_id, j.jogador_id, null)
-                      }
-                      className="w-full rounded-lg border border-neutral-700 bg-neutral-900 px-2 py-2 text-sm hover:border-emerald-500"
-                    >
-                      +1 {j.nome}
-                    </button>
-                    {expandido === j.jogador_id && (
-                      <div className="mt-1 flex flex-wrap gap-1 rounded-lg border border-emerald-500/40 bg-emerald-500/5 p-2">
-                        {MOTIVOS.map((m) => (
-                          <button
-                            key={m.valor}
-                            type="button"
-                            onClick={() => handleEscolherMotivo(partida.time_b_id, j.jogador_id, m.valor)}
-                            className="rounded-full bg-neutral-800 px-2 py-1 text-xs text-neutral-200 hover:bg-emerald-500/20 hover:text-emerald-400"
-                          >
-                            {m.label}
-                          </button>
-                        ))}
+                {jogadoresB.map((j) => {
+                  const cartoesJ = cartoesDoJogador(j.jogador_id)
+                  return (
+                    <div key={j.jogador_id}>
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => handleClicarJogador(j.jogador_id)}
+                          className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 px-2 py-2 text-sm hover:border-emerald-500"
+                        >
+                          +1 {j.nome}
+                          {cartoesJ.amarelo > 0 && ` 🟨${cartoesJ.amarelo > 1 ? cartoesJ.amarelo : ''}`}
+                          {cartoesJ.vermelho > 0 && ' 🟥'}
+                        </button>
+                        {!ehVolei && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleCartao(j.jogador_id, 'amarelo')}
+                              title="Cartão amarelo"
+                              className="rounded-lg border border-neutral-800 px-2 text-sm hover:border-amber-400"
+                            >
+                              🟨
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleCartao(j.jogador_id, 'vermelho')}
+                              title="Cartão vermelho"
+                              className="rounded-lg border border-neutral-800 px-2 text-sm hover:border-red-400"
+                            >
+                              🟥
+                            </button>
+                          </>
+                        )}
                       </div>
-                    )}
-                  </div>
-                ))}
+                      {expandido === j.jogador_id && (
+                        <div className="mt-1 flex flex-wrap gap-1 rounded-lg border border-emerald-500/40 bg-emerald-500/5 p-2">
+                          {ehVolei
+                            ? MOTIVOS.map((m) => (
+                                <button
+                                  key={m.valor}
+                                  type="button"
+                                  onClick={() => handleEscolherMotivo(partida.time_b_id, j.jogador_id, m.valor)}
+                                  className="rounded-full bg-neutral-800 px-2 py-1 text-xs text-neutral-200 hover:bg-emerald-500/20 hover:text-emerald-400"
+                                >
+                                  {m.label}
+                                </button>
+                              ))
+                            : (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleEscolherAssistencia(partida.time_b_id, j.jogador_id, null)}
+                                    className="rounded-full bg-neutral-800 px-2 py-1 text-xs text-neutral-400 hover:bg-emerald-500/20 hover:text-emerald-400"
+                                  >
+                                    Sem assistência
+                                  </button>
+                                  {jogadoresB
+                                    .filter((t) => t.jogador_id !== j.jogador_id)
+                                    .map((t) => (
+                                      <button
+                                        key={t.jogador_id}
+                                        type="button"
+                                        onClick={() => handleEscolherAssistencia(partida.time_b_id, j.jogador_id, t.jogador_id)}
+                                        className="rounded-full bg-neutral-800 px-2 py-1 text-xs text-neutral-200 hover:bg-emerald-500/20 hover:text-emerald-400"
+                                      >
+                                        {t.nome}
+                                      </button>
+                                    ))}
+                                </>
+                              )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
                 <button
                   onClick={() => handlePonto(partida.time_b_id, null, null)}
                   className="w-full rounded-lg border border-neutral-800 px-2 py-2 text-xs text-neutral-500 hover:border-neutral-600"

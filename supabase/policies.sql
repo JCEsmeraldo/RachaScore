@@ -702,6 +702,30 @@ create policy "dono lanca ponto (delete)" on eventos_ponto
   using (public.is_organizador_grupo(public.grupo_da_partida(partida_id)));
 
 -- ============================================================
+-- cartoes
+-- ============================================================
+
+drop policy if exists "membros veem cartoes" on cartoes;
+create policy "membros veem cartoes" on cartoes
+  for select to authenticated
+  using (public.is_membro_grupo(public.grupo_da_partida(partida_id)));
+
+drop policy if exists "dono lanca cartao (insert)" on cartoes;
+create policy "dono lanca cartao (insert)" on cartoes
+  for insert to authenticated
+  with check (public.is_organizador_grupo(public.grupo_da_partida(partida_id)));
+
+drop policy if exists "dono lanca cartao (update)" on cartoes;
+create policy "dono lanca cartao (update)" on cartoes
+  for update to authenticated
+  using (public.is_organizador_grupo(public.grupo_da_partida(partida_id)));
+
+drop policy if exists "dono lanca cartao (delete)" on cartoes;
+create policy "dono lanca cartao (delete)" on cartoes
+  for delete to authenticated
+  using (public.is_organizador_grupo(public.grupo_da_partida(partida_id)));
+
+-- ============================================================
 -- escalacoes_partida
 -- ============================================================
 

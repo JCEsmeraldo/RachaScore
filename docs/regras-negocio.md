@@ -54,10 +54,11 @@ Times (`times`) pertencem a um racha e nunca são fixos entre rachas diferentes.
 - Cada partida pertence a um racha e envolve dois times.
 - O placar é registrado de forma granular: cada ponto/gol é um evento próprio (`eventos_ponto`), não apenas um número final.
 - **Autoria do ponto/gol é opcional**:
-  - Futebol: o gol normalmente tem um autor. Em caso de gol contra, o evento pode ficar sem autor.
+  - Futebol: o gol normalmente tem um autor. Em caso de gol contra, o evento pode ficar sem autor. Marcar o gol pode opcionalmente registrar uma **assistência** (um companheiro de time, ou "sem assistência").
   - Vôlei: pontos podem não ter autor (ex.: erro de saque do adversário). Cada evento pode registrar um **motivo**: `ataque`, `bloqueio`, `saque`, `erro_adversario` ou `outro`.
 - Vôlei possui a camada extra de **sets**: cada set tem seu próprio placar, e a partida é decidida pelo número de sets vencidos por cada time.
 - Futebol tem **cronômetro** persistido no banco (não é só um timer local): pode ser iniciado/pausado/zerado, sincroniza entre dispositivos vendo a mesma partida ao vivo, e não encerra sozinho ao bater o tempo configurado (só sinaliza "acréscimos") — quem encerra é o organizador.
+- Futebol permite registrar **cartões** (amarelo/vermelho) por jogador — é um registro avulso, não afeta placar nem escalação, só estatística.
 - Placar e cronômetro sincronizam em tempo real entre dispositivos (Supabase Realtime) — útil quando mais de uma pessoa acompanha a mesma partida ao vivo.
 
 ## 7. Pontuação do Torneio

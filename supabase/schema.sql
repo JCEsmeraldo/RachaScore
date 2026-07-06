@@ -111,7 +111,17 @@ create table eventos_ponto (
   set_id uuid references sets(id) on delete cascade, -- só volei
   time_id uuid not null references times(id), -- time que ganhou o ponto
   jogador_id uuid references jogadores(id), -- opcional: nem todo ponto tem autor (ex: erro adversário no vôlei)
+  assistencia_jogador_id uuid references jogadores(id), -- opcional, só futebol
   motivo text check (motivo in ('ataque', 'bloqueio', 'saque', 'erro_adversario', 'outro')),
+  created_at timestamptz not null default now()
+);
+
+-- Cartão (só futebol) — registro avulso, não afeta placar nem escalação
+create table cartoes (
+  id uuid primary key default gen_random_uuid(),
+  partida_id uuid not null references partidas(id) on delete cascade,
+  jogador_id uuid not null references jogadores(id) on delete cascade,
+  tipo text not null check (tipo in ('amarelo', 'vermelho')),
   created_at timestamptz not null default now()
 );
 
@@ -193,6 +203,7 @@ alter table sets enable row level security;
 alter table eventos_ponto enable row level security;
 alter table escalacoes_partida enable row level security;
 alter table avaliacoes enable row level security;
+alter table cartoes enable row level security;
 
 -- Tabelas criadas via SQL Editor não ganham GRANT automático pros roles do PostgREST
 -- (diferente de tabelas criadas pelo Table Editor). RLS restringe linhas, mas sem

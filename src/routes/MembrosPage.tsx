@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
-import type { Grupo, MembroComJogador } from '../lib/types'
+import type { Grupo, MediaAvaliacao, MembroComJogador } from '../lib/types'
 
 export function MembrosPage() {
   const { grupoId } = useParams<{ grupoId: string }>()
@@ -10,6 +10,7 @@ export function MembrosPage() {
 
   const [grupo, setGrupo] = useState<Grupo | null>(null)
   const [membros, setMembros] = useState<MembroComJogador[]>([])
+  const [medias, setMedias] = useState<MediaAvaliacao[]>([])
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
   const [nomeNovoMembro, setNomeNovoMembro] = useState('')
@@ -25,14 +26,18 @@ export function MembrosPage() {
     if (!grupoId) return
     setLoading(true)
 
-    const [{ data: grupoData, error: erroGrupo }, { data: membrosData, error: erroMembros }] =
-      await Promise.all([
-        supabase.from('grupos').select('*').eq('id', grupoId).single(),
-        supabase
-          .from('membros_grupo')
-          .select('jogador_id, is_admin, jogadores(id, nome, user_id, email, created_at)')
-          .eq('grupo_id', grupoId),
-      ])
+    const [
+      { data: grupoData, error: erroGrupo },
+      { data: membrosData, error: erroMembros },
+      { data: mediasData },
+    ] = await Promise.all([
+      supabase.from('grupos').select('*').eq('id', grupoId).single(),
+      supabase
+        .from('membros_grupo')
+        .select('jogador_id, is_admin, jogadores(id, nome, user_id, email, created_at)')
+        .eq('grupo_id', grupoId),
+      supabase.rpc('medias_avaliacao_grupo', { p_grupo_id: grupoId }),
+    ])
 
     if (erroGrupo) {
       setErro(erroGrupo.message)
@@ -46,6 +51,7 @@ export function MembrosPage() {
       setMembros((membrosData as unknown as MembroComJogador[]) ?? [])
     }
 
+    setMedias((mediasData ?? []) as MediaAvaliacao[])
     setLoading(false)
   }
 
@@ -224,6 +230,13 @@ export function MembrosPage() {
                       convite pendente ({membro.jogadores.email})
                     </span>
                   )}
+                  {medias
+                    .filter((m) => m.jogador_id === membro.jogador_id)
+                    .map((m) => (
+                      <span key={m.modalidade} className="ml-2 text-xs text-neutral-400">
+                        {m.modalidade === 'volei' ? '🏐' : '⚽'} {m.nota_media.toFixed(1)}
+                      </span>
+                    ))}
                 </Link>
                 {souOrganizador && membro.jogadores?.user_id !== grupo?.dono_id && (
                   <div className="flex gap-3">

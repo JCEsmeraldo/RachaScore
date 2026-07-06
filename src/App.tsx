@@ -12,6 +12,7 @@ import { TimesPage } from './routes/TimesPage'
 import { PartidasPage } from './routes/PartidasPage'
 import { CriarPartidaPage } from './routes/CriarPartidaPage'
 import { PartidaDetailPage } from './routes/PartidaDetailPage'
+import { AvaliarPage } from './routes/AvaliarPage'
 import { EstatisticasRachaPage } from './routes/EstatisticasRachaPage'
 import { EstatisticasGrupoPage } from './routes/EstatisticasGrupoPage'
 import { JogadorDetailPage } from './routes/JogadorDetailPage'
@@ -34,6 +35,7 @@ function App() {
         <Route path="/grupos/:grupoId/rachas/:rachaId/presenca" element={<PresencaPage />} />
         <Route path="/grupos/:grupoId/rachas/:rachaId/times" element={<TimesPage />} />
         <Route path="/grupos/:grupoId/rachas/:rachaId/partidas" element={<PartidasPage />} />
+        <Route path="/grupos/:grupoId/rachas/:rachaId/avaliar" element={<AvaliarPage />} />
         <Route path="/grupos/:grupoId/rachas/:rachaId/partidas/nova" element={<CriarPartidaPage />} />
         <Route
           path="/grupos/:grupoId/rachas/:rachaId/partidas/:partidaId"

@@ -195,6 +195,13 @@ export function RachaDetailPage() {
               >
                 <span className="font-medium">Estatísticas</span>
               </Link>
+
+              <Link
+                to={`/grupos/${grupoId}/rachas/${rachaId}/avaliar`}
+                className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-4 hover:border-neutral-700"
+              >
+                <span className="font-medium">Avaliar jogadores</span>
+              </Link>
             </div>
           </>
         )}

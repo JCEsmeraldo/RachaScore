@@ -333,6 +333,101 @@ $$;
 grant execute on function public.entrar_no_grupo(uuid) to authenticated;
 
 -- ============================================================
+-- RPC: avaliar jogadores de um racha (nota 1-5, exceto a si mesmo)
+-- ============================================================
+-- Toda a validação (confirmou presença, avaliado também confirmou, não é a
+-- si mesmo, nota no range) fica aqui — a tabela avaliacoes não tem policy de
+-- insert/update pra ninguém, só essa RPC (security definer) escreve nela.
+-- Reenviar sobrescreve a nota anterior daquele par (upsert).
+create or replace function public.avaliar_jogadores(p_racha_id uuid, p_notas jsonb)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_meu_jogador_id uuid;
+  v_grupo_id uuid;
+  v_item jsonb;
+  v_jogador_id uuid;
+  v_nota int;
+begin
+  select id into v_meu_jogador_id from jogadores where user_id = auth.uid();
+  if v_meu_jogador_id is null then
+    raise exception 'Jogador não encontrado';
+  end if;
+
+  select grupo_id into v_grupo_id from rachas where id = p_racha_id;
+  if v_grupo_id is null or not public.is_membro_grupo(v_grupo_id) then
+    raise exception 'Sem acesso a esse racha';
+  end if;
+
+  if not exists (
+    select 1 from presencas_racha
+    where racha_id = p_racha_id and jogador_id = v_meu_jogador_id and status = 'confirmado'
+  ) then
+    raise exception 'Só quem confirmou presença pode avaliar';
+  end if;
+
+  for v_item in select * from jsonb_array_elements(p_notas)
+  loop
+    v_jogador_id := (v_item->>'jogador_id')::uuid;
+    v_nota := (v_item->>'nota')::int;
+
+    if v_jogador_id = v_meu_jogador_id then
+      raise exception 'Não pode avaliar a si mesmo';
+    end if;
+
+    if v_nota < 1 or v_nota > 5 then
+      raise exception 'Nota precisa ser entre 1 e 5';
+    end if;
+
+    if not exists (
+      select 1 from presencas_racha
+      where racha_id = p_racha_id and jogador_id = v_jogador_id and status = 'confirmado'
+    ) then
+      raise exception 'Jogador avaliado não confirmou presença nesse racha';
+    end if;
+
+    insert into avaliacoes (racha_id, avaliador_jogador_id, avaliado_jogador_id, nota)
+    values (p_racha_id, v_meu_jogador_id, v_jogador_id, v_nota)
+    on conflict (racha_id, avaliador_jogador_id, avaliado_jogador_id)
+    do update set nota = excluded.nota, created_at = now();
+  end loop;
+end;
+$$;
+
+grant execute on function public.avaliar_jogadores(uuid, jsonb) to authenticated;
+
+-- ============================================================
+-- RPC: médias de avaliação por jogador/modalidade, dentro de um grupo
+-- ============================================================
+-- Só devolve dados agregados (média + total) — nunca a nota individual nem
+-- quem avaliou quem. Por isso pode rodar security definer (ignora a policy
+-- restritiva de select em avaliacoes) sem vazar voto de ninguém; o gate de
+-- acesso é o próprio is_membro_grupo checado dentro da função.
+create or replace function public.medias_avaliacao_grupo(p_grupo_id uuid)
+returns table (jogador_id uuid, modalidade text, nota_media numeric, total_avaliacoes bigint)
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select
+    a.avaliado_jogador_id as jogador_id,
+    r.modalidade,
+    round(avg(a.nota), 2) as nota_media,
+    count(*) as total_avaliacoes
+  from avaliacoes a
+  join rachas r on r.id = a.racha_id
+  where r.grupo_id = p_grupo_id
+    and public.is_membro_grupo(p_grupo_id)
+  group by a.avaliado_jogador_id, r.modalidade;
+$$;
+
+grant execute on function public.medias_avaliacao_grupo(uuid) to authenticated;
+
+-- ============================================================
 -- profiles
 -- ============================================================
 
@@ -629,3 +724,20 @@ drop policy if exists "dono gerencia escalacoes (delete)" on escalacoes_partida;
 create policy "dono gerencia escalacoes (delete)" on escalacoes_partida
   for delete to authenticated
   using (public.is_organizador_grupo(public.grupo_da_partida(partida_id)));
+
+-- ============================================================
+-- avaliacoes
+-- ============================================================
+-- Sem policy de insert/update/delete pra ninguém — toda escrita passa pela
+-- RPC avaliar_jogadores (security definer), que valida tudo antes de gravar.
+
+drop policy if exists "avaliador ve proprias avaliacoes" on avaliacoes;
+create policy "avaliador ve proprias avaliacoes" on avaliacoes
+  for select to authenticated
+  using (
+    exists (
+      select 1 from jogadores j
+      where j.id = avaliacoes.avaliador_jogador_id and j.user_id = auth.uid()
+    )
+    or public.is_organizador_grupo(public.grupo_da_racha(racha_id))
+  );

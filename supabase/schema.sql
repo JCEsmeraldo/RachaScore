@@ -115,6 +115,19 @@ create table eventos_ponto (
   created_at timestamptz not null default now()
 );
 
+-- Avaliação de jogador por jogador, por racha (1 a 5). Só quem confirmou
+-- presença pode avaliar, só de quem também confirmou, nunca de si mesmo — tudo
+-- validado na RPC avaliar_jogadores (ver policies.sql), não direto na tabela.
+create table avaliacoes (
+  racha_id uuid not null references rachas(id) on delete cascade,
+  avaliador_jogador_id uuid not null references jogadores(id) on delete cascade,
+  avaliado_jogador_id uuid not null references jogadores(id) on delete cascade,
+  nota int not null check (nota between 1 and 5),
+  created_at timestamptz not null default now(),
+  primary key (racha_id, avaliador_jogador_id, avaliado_jogador_id),
+  check (avaliador_jogador_id <> avaliado_jogador_id)
+);
+
 -- Escalação por partida (só modo rápido): quem joga em qual time NAQUELA
 -- partida específica, sem prender o jogador ao time do racha inteiro (torneio
 -- continua usando presencas_racha.time_id, fixo pro racha, pra classificação
@@ -179,6 +192,7 @@ alter table partidas enable row level security;
 alter table sets enable row level security;
 alter table eventos_ponto enable row level security;
 alter table escalacoes_partida enable row level security;
+alter table avaliacoes enable row level security;
 
 -- Tabelas criadas via SQL Editor não ganham GRANT automático pros roles do PostgREST
 -- (diferente de tabelas criadas pelo Table Editor). RLS restringe linhas, mas sem

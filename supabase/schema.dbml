@@ -123,6 +123,25 @@ Table escalacoes_partida {
   '''
 }
 
+Table avaliacoes {
+  racha_id uuid [not null]
+  avaliador_jogador_id uuid [not null]
+  avaliado_jogador_id uuid [not null]
+  nota int [not null, note: 'entre 1 e 5']
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (racha_id, avaliador_jogador_id, avaliado_jogador_id) [pk]
+  }
+
+  note: '''
+    Avaliação de jogador por jogador, por racha. Só quem confirmou presença
+    avalia, só quem também confirmou é avaliado, nunca a si mesmo — tudo
+    validado na RPC avaliar_jogadores, não em policy direta na tabela.
+    Média por jogador/modalidade é agregada via RPC medias_avaliacao_grupo.
+  '''
+}
+
 enum modalidade_enum {
   futebol
   volei
@@ -175,6 +194,9 @@ Ref: eventos_ponto.jogador_id > jogadores.id
 Ref: escalacoes_partida.partida_id > partidas.id
 Ref: escalacoes_partida.jogador_id > jogadores.id
 Ref: escalacoes_partida.time_id > times.id
+Ref: avaliacoes.racha_id > rachas.id
+Ref: avaliacoes.avaliador_jogador_id > jogadores.id
+Ref: avaliacoes.avaliado_jogador_id > jogadores.id
 
 // classificacao_racha: view calculada (não modelada) — agrega partidas
 // finalizadas por time_id dentro de um racha em modo torneio.

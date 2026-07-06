@@ -98,6 +98,21 @@ export type EscalacaoComJogador = {
   jogadores: { nome: string } | null
 }
 
+export type Avaliacao = {
+  racha_id: string
+  avaliador_jogador_id: string
+  avaliado_jogador_id: string
+  nota: number
+  created_at: string
+}
+
+export type MediaAvaliacao = {
+  jogador_id: string
+  modalidade: 'futebol' | 'volei'
+  nota_media: number
+  total_avaliacoes: number
+}
+
 export type ClassificacaoTime = {
   racha_id: string
   time_id: string

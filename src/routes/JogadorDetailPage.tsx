@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { montarTabelaMotivos, type LinhaMotivo } from '../lib/estatisticas'
 import { TabelaMotivos } from '../components/TabelaMotivos'
+import type { MediaAvaliacao } from '../lib/types'
 
 type StatsModalidade = {
   jogos: number
@@ -11,10 +12,11 @@ type StatsModalidade = {
   derrotas: number
   pontos: number
   motivos: LinhaMotivo[]
+  avaliacao: MediaAvaliacao | null
 }
 
 function statsVazio(): StatsModalidade {
-  return { jogos: 0, vitorias: 0, empates: 0, derrotas: 0, pontos: 0, motivos: [] }
+  return { jogos: 0, vitorias: 0, empates: 0, derrotas: 0, pontos: 0, motivos: [], avaliacao: null }
 }
 
 export function JogadorDetailPage() {
@@ -31,11 +33,15 @@ export function JogadorDetailPage() {
       if (!grupoId || !jogadorId) return
       setLoading(true)
 
-      const [{ data: jogadorData, error: erroJogador }, { data: rachasData, error: erroRachas }] =
-        await Promise.all([
-          supabase.from('jogadores').select('nome').eq('id', jogadorId).single(),
-          supabase.from('rachas').select('id, modalidade').eq('grupo_id', grupoId),
-        ])
+      const [
+        { data: jogadorData, error: erroJogador },
+        { data: rachasData, error: erroRachas },
+        { data: mediasData },
+      ] = await Promise.all([
+        supabase.from('jogadores').select('nome').eq('id', jogadorId).single(),
+        supabase.from('rachas').select('id, modalidade').eq('grupo_id', grupoId),
+        supabase.rpc('medias_avaliacao_grupo', { p_grupo_id: grupoId }),
+      ])
 
       if (erroJogador || erroRachas) {
         setErro(erroJogador?.message ?? erroRachas?.message ?? 'Erro ao carregar jogador')
@@ -49,7 +55,12 @@ export function JogadorDetailPage() {
       const rachaModalidade = new Map(rachas.map((r) => [r.id, r.modalidade]))
       const rachaIds = rachas.map((r) => r.id)
 
+      const medias = (mediasData ?? []) as MediaAvaliacao[]
+      const minhasMedias = medias.filter((m) => m.jogador_id === jogadorId)
+
       if (rachaIds.length === 0) {
+        setFutebol({ ...statsVazio(), avaliacao: minhasMedias.find((m) => m.modalidade === 'futebol') ?? null })
+        setVolei({ ...statsVazio(), avaliacao: minhasMedias.find((m) => m.modalidade === 'volei') ?? null })
         setLoading(false)
         return
       }
@@ -126,6 +137,9 @@ export function JogadorDetailPage() {
         }
       }
 
+      contadores.futebol.avaliacao = minhasMedias.find((m) => m.modalidade === 'futebol') ?? null
+      contadores.volei.avaliacao = minhasMedias.find((m) => m.modalidade === 'volei') ?? null
+
       setFutebol(contadores.futebol)
       setVolei(contadores.volei)
       setLoading(false)
@@ -135,38 +149,48 @@ export function JogadorDetailPage() {
   }, [grupoId, jogadorId])
 
   function renderModalidade(nomeModalidade: string, stats: StatsModalidade, labelPontos: string, mostrarMotivo: boolean) {
-    if (stats.jogos === 0) return null
+    if (stats.jogos === 0 && !stats.avaliacao) return null
 
     return (
       <div className="space-y-3 rounded-lg border border-neutral-800 bg-neutral-900 p-4">
-        <h2 className="text-lg font-semibold">{nomeModalidade}</h2>
-
-        <div className="grid grid-cols-4 gap-2 text-center text-sm">
-          <div>
-            <p className="text-neutral-500">Jogos</p>
-            <p className="text-lg font-medium">{stats.jogos}</p>
-          </div>
-          <div>
-            <p className="text-neutral-500">Vitórias</p>
-            <p className="text-lg font-medium">{stats.vitorias}</p>
-          </div>
-          {nomeModalidade === 'Futebol' && (
-            <div>
-              <p className="text-neutral-500">Empates</p>
-              <p className="text-lg font-medium">{stats.empates}</p>
-            </div>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">{nomeModalidade}</h2>
+          {stats.avaliacao && (
+            <p className="text-sm text-neutral-400">
+              ⭐ {stats.avaliacao.nota_media.toFixed(1)}{' '}
+              <span className="text-neutral-600">({stats.avaliacao.total_avaliacoes})</span>
+            </p>
           )}
-          <div>
-            <p className="text-neutral-500">Derrotas</p>
-            <p className="text-lg font-medium">{stats.derrotas}</p>
-          </div>
-          <div>
-            <p className="text-neutral-500">{labelPontos}</p>
-            <p className="text-lg font-medium">{stats.pontos}</p>
-          </div>
         </div>
 
-        {mostrarMotivo && (
+        {stats.jogos > 0 && (
+          <div className="grid grid-cols-4 gap-2 text-center text-sm">
+            <div>
+              <p className="text-neutral-500">Jogos</p>
+              <p className="text-lg font-medium">{stats.jogos}</p>
+            </div>
+            <div>
+              <p className="text-neutral-500">Vitórias</p>
+              <p className="text-lg font-medium">{stats.vitorias}</p>
+            </div>
+            {nomeModalidade === 'Futebol' && (
+              <div>
+                <p className="text-neutral-500">Empates</p>
+                <p className="text-lg font-medium">{stats.empates}</p>
+              </div>
+            )}
+            <div>
+              <p className="text-neutral-500">Derrotas</p>
+              <p className="text-lg font-medium">{stats.derrotas}</p>
+            </div>
+            <div>
+              <p className="text-neutral-500">{labelPontos}</p>
+              <p className="text-lg font-medium">{stats.pontos}</p>
+            </div>
+          </div>
+        )}
+
+        {mostrarMotivo && stats.jogos > 0 && (
           <div className="space-y-1">
             <TabelaMotivos linhas={stats.motivos} mostrarJogador={false} mostrarJogos={false} />
           </div>
@@ -189,7 +213,7 @@ export function JogadorDetailPage() {
 
         {loading ? (
           <p className="text-neutral-400">Carregando...</p>
-        ) : futebol.jogos === 0 && volei.jogos === 0 ? (
+        ) : futebol.jogos === 0 && volei.jogos === 0 && !futebol.avaliacao && !volei.avaliacao ? (
           <p className="text-sm text-neutral-500">Nenhuma partida jogada ainda.</p>
         ) : (
           <>

@@ -1,75 +1,44 @@
-# React + TypeScript + Vite
+# RachaScore
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+App pra organizar rachas(peladas) de futebol e vôlei de um grupo fixo de amigos: presença com lista de espera, sorteio/montagem de times, placar ao vivo, estatísticas e avaliação de jogadores.
 
-Currently, two official plugins are available:
+## Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- React 19 + Vite + TypeScript
+- React Router v7
+- Tailwind CSS v4
+- Supabase (Postgres + Auth + Realtime)
+- Deploy: GitHub Pages via GitHub Actions ([.github/workflows/deploy.yml](.github/workflows/deploy.yml))
 
-## React Compiler
+## Funcionalidades
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- Grupos com membros fixos e avulsos, convite por link
+- Racha em modo **torneio** (times fixos, classificação) ou **rápido** (times montados partida a partida, com time personalizado na hora)
+- Presença com limite de jogadores e lista de espera automática
+- Placar granular por evento de ponto/gol — motivo do ponto no vôlei, assistência e cartões no futebol
+- Cronômetro do futebol persistido no banco, sincronizado ao vivo entre dispositivos
+- Sorteio de times preservando histórico de partidas já jogadas
+- Estatísticas por racha, por grupo e por jogador
+- Avaliação de jogadores (nota 1-5 por racha, média por modalidade)
+- Compartilhamento da lista de presença pro WhatsApp
 
-## Expanding the ESLint configuration
+Regras de negócio detalhadas em [docs/regras-negocio.md](docs/regras-negocio.md).
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Rodando localmente
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+Requer Node 22 (ver [.nvmrc](.nvmrc)).
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+```bash
+npm install
+cp .env.example .env   # preenche VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Banco: rode [supabase/schema.sql](supabase/schema.sql) e depois [supabase/policies.sql](supabase/policies.sql) no SQL Editor do projeto Supabase. Modelo do schema em [supabase/schema.dbml](supabase/schema.dbml) (visualizável em [dbdiagram.io](https://dbdiagram.io)).
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Scripts
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
-```
+- `npm run dev` — servidor de desenvolvimento
+- `npm run build` — type-check (`tsc -b`) + build de produção
+- `npm run lint` — ESLint
+- `npm run preview` — preview do build de produção

@@ -26,7 +26,7 @@ Regras de negócio detalhadas em [docs/regras-negocio.md](docs/regras-negocio.md
 
 ## Rodando localmente
 
-Requer Node 22 (ver [.nvmrc](.nvmrc)).
+Requer Node 24 (ver [.nvmrc](.nvmrc)).
 
 ```bash
 npm install

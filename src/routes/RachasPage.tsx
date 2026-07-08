@@ -33,7 +33,7 @@ export function RachasPage() {
           .from('rachas')
           .select('*')
           .eq('grupo_id', grupoId)
-          .order('data_hora', { ascending: false }),
+          .order('data_hora', { ascending: true }),
       ])
 
       if (erroGrupo) setErro(erroGrupo.message)

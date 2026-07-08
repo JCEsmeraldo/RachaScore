@@ -5,6 +5,8 @@ import type { PresencaComJogador, Racha, Time } from '../lib/types'
 
 const CUSTOM = 'custom'
 
+type JogadorNome = { jogador_id: string; nome: string }
+
 export function CriarPartidaPage() {
   const { grupoId, rachaId } = useParams<{ grupoId: string; rachaId: string }>()
   const navigate = useNavigate()
@@ -14,6 +16,7 @@ export function CriarPartidaPage() {
   const [timeA, setTimeA] = useState('')
   const [timeB, setTimeB] = useState('')
   const [confirmados, setConfirmados] = useState<PresencaComJogador[]>([])
+  const [rosterPorTime, setRosterPorTime] = useState<Map<string, JogadorNome[]>>(new Map())
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
 
@@ -27,24 +30,25 @@ export function CriarPartidaPage() {
 
   const modoRapido = racha?.modo === 'rapido'
 
-  // só oferece no dropdown os times que têm jogador vinculado agora — times
-  // travados em partidas passadas ficam de fora, sem poluir a lista
-  const idsComJogador = new Set(confirmados.map((p) => p.time_id).filter(Boolean))
-  const timesAtivos = times.filter((t) => idsComJogador.has(t.id))
-
   useEffect(() => {
     async function carregar() {
       if (!rachaId) return
 
-      const [{ data: rachaData }, { data: timesData }, { data: presencasData }] = await Promise.all([
-        supabase.from('rachas').select('*').eq('id', rachaId).single(),
-        supabase.from('times').select('*').eq('racha_id', rachaId).order('created_at', { ascending: false }),
-        supabase
-          .from('presencas_racha')
-          .select('jogador_id, status, time_id, pediu_vaga_em, jogadores(id, nome, user_id, email, created_at)')
-          .eq('racha_id', rachaId)
-          .eq('status', 'confirmado'),
-      ])
+      const [{ data: rachaData }, { data: timesData }, { data: presencasData }, { data: partidasData }] =
+        await Promise.all([
+          supabase.from('rachas').select('*').eq('id', rachaId).single(),
+          supabase.from('times').select('*').eq('racha_id', rachaId).order('created_at', { ascending: false }),
+          supabase
+            .from('presencas_racha')
+            .select('jogador_id, status, time_id, pediu_vaga_em, jogadores(id, nome, user_id, email, created_at)')
+            .eq('racha_id', rachaId)
+            .eq('status', 'confirmado'),
+          supabase
+            .from('partidas')
+            .select('id, time_a_id, time_b_id')
+            .eq('racha_id', rachaId)
+            .order('created_at', { ascending: false }),
+        ])
 
       setRacha(rachaData)
       setTimes(timesData ?? [])
@@ -54,6 +58,35 @@ export function CriarPartidaPage() {
         setTimeA(timesData[0].id)
         setTimeB(timesData[1].id)
       }
+
+      // roster histórico por time — pra poder reaproveitar um time já usado
+      // numa partida antiga mesmo que a presença atual já tenha mudado de lado
+      const partidas = partidasData ?? []
+      const ultimaPartidaPorTime = new Map<string, string>()
+      for (const p of partidas) {
+        if (!ultimaPartidaPorTime.has(p.time_a_id)) ultimaPartidaPorTime.set(p.time_a_id, p.id)
+        if (!ultimaPartidaPorTime.has(p.time_b_id)) ultimaPartidaPorTime.set(p.time_b_id, p.id)
+      }
+
+      const partidaIds = partidas.map((p) => p.id)
+      const roster = new Map<string, JogadorNome[]>()
+
+      if (partidaIds.length > 0) {
+        const { data: escalacoesData } = await supabase
+          .from('escalacoes_partida')
+          .select('partida_id, jogador_id, time_id, jogadores(nome)')
+          .in('partida_id', partidaIds)
+
+        for (const [timeId, partidaId] of ultimaPartidaPorTime) {
+          const membros = (escalacoesData ?? [])
+            .filter((e) => e.partida_id === partidaId && e.time_id === timeId)
+            .map((e) => ({ jogador_id: e.jogador_id, nome: (e.jogadores as unknown as { nome: string } | null)?.nome ?? '?' }))
+
+          if (membros.length > 0) roster.set(timeId, membros)
+        }
+      }
+
+      setRosterPorTime(roster)
     }
 
     carregar()
@@ -89,6 +122,17 @@ export function CriarPartidaPage() {
     })
   }
 
+  // roster de um time já existente: prioriza a escalação da última partida em
+  // que ele jogou (funciona mesmo se a presença atual já mudou de lado depois);
+  // sem histórico (time recém-sorteado, nunca jogou), cai pra presença atual
+  function jogadoresDoTime(timeId: string): JogadorNome[] {
+    const historico = rosterPorTime.get(timeId)
+    if (historico) return historico
+    return confirmados
+      .filter((p) => p.time_id === timeId)
+      .map((p) => ({ jogador_id: p.jogador_id, nome: p.jogadores?.nome ?? '?' }))
+  }
+
   async function handleSubmitRapido(e: FormEvent) {
     e.preventDefault()
     if (!rachaId || !racha) return
@@ -104,13 +148,9 @@ export function CriarPartidaPage() {
     }
 
     const jogadoresA =
-      ladoASelecao === CUSTOM
-        ? customJogadoresA
-        : confirmados.filter((p) => p.time_id === ladoASelecao).map((p) => p.jogador_id)
+      ladoASelecao === CUSTOM ? customJogadoresA : jogadoresDoTime(ladoASelecao).map((j) => j.jogador_id)
     const jogadoresB =
-      ladoBSelecao === CUSTOM
-        ? customJogadoresB
-        : confirmados.filter((p) => p.time_id === ladoBSelecao).map((p) => p.jogador_id)
+      ladoBSelecao === CUSTOM ? customJogadoresB : jogadoresDoTime(ladoBSelecao).map((j) => j.jogador_id)
 
     if (jogadoresA.length === 0 || jogadoresB.length === 0) {
       setErro('Cada time precisa de pelo menos 1 jogador')
@@ -262,7 +302,7 @@ export function CriarPartidaPage() {
     return (
       <>
         <option value="">Selecione</option>
-        {timesAtivos.map((t) => (
+        {times.map((t) => (
           <option key={t.id} value={t.id} disabled={t.id === outraSelecao && outraSelecao !== CUSTOM}>
             {t.nome}
           </option>
@@ -270,10 +310,6 @@ export function CriarPartidaPage() {
         <option value={CUSTOM}>+ Time personalizado</option>
       </>
     )
-  }
-
-  function rosterDoTime(timeId: string) {
-    return confirmados.filter((p) => p.time_id === timeId).map((p) => p.jogadores?.nome ?? '?')
   }
 
   return (
@@ -308,7 +344,7 @@ export function CriarPartidaPage() {
 
               {ladoASelecao && ladoASelecao !== CUSTOM && (
                 <div className="mt-2 rounded-lg border border-neutral-800 bg-neutral-900 p-3 text-sm text-neutral-400">
-                  {rosterDoTime(ladoASelecao).join(', ')}
+                  {jogadoresDoTime(ladoASelecao).map((j) => j.nome).join(', ')}
                 </div>
               )}
 
@@ -349,7 +385,7 @@ export function CriarPartidaPage() {
 
               {ladoBSelecao && ladoBSelecao !== CUSTOM && (
                 <div className="mt-2 rounded-lg border border-neutral-800 bg-neutral-900 p-3 text-sm text-neutral-400">
-                  {rosterDoTime(ladoBSelecao).join(', ')}
+                  {jogadoresDoTime(ladoBSelecao).map((j) => j.nome).join(', ')}
                 </div>
               )}
 

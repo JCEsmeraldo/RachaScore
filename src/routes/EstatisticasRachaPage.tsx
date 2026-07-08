@@ -54,7 +54,7 @@ export function EstatisticasRachaPage() {
       if (partidaIds.length > 0) {
         const { data: eventosData, error: erroEventos } = await supabase
           .from('eventos_ponto')
-          .select('partida_id, jogador_id, motivo, jogadores(nome)')
+          .select('partida_id, jogador_id, motivo, jogadores!eventos_ponto_jogador_id_fkey(nome)')
           .in('partida_id', partidaIds)
 
         if (erroEventos) {

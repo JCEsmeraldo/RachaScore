@@ -257,6 +257,52 @@ export function PartidaDetailPage() {
     carregar()
   }
 
+  async function handleDesfazerUltimoPonto() {
+    if (!partidaId || !partida || !racha) return
+    setErro(null)
+
+    const ehVolei = racha.modalidade === 'volei'
+
+    let query = supabase.from('eventos_ponto').select('*').eq('partida_id', partidaId)
+    query = ehVolei ? query.eq('set_id', setAtual?.id ?? '') : query.is('set_id', null)
+
+    const { data: ultimoEvento, error: erroBusca } = await query
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (erroBusca) {
+      setErro(erroBusca.message)
+      return
+    }
+
+    if (!ultimoEvento) return
+
+    const { error: erroDelete } = await supabase.from('eventos_ponto').delete().eq('id', ultimoEvento.id)
+
+    if (erroDelete) {
+      setErro(erroDelete.message)
+      return
+    }
+
+    const ehTimeA = ultimoEvento.time_id === partida.time_a_id
+    const campo = ehTimeA ? 'placar_a' : 'placar_b'
+
+    if (ehVolei && setAtual) {
+      await supabase
+        .from('sets')
+        .update({ [campo]: Math.max(setAtual[campo] - 1, 0) })
+        .eq('id', setAtual.id)
+    } else {
+      await supabase
+        .from('partidas')
+        .update({ [campo]: Math.max(partida[campo] - 1, 0) })
+        .eq('id', partidaId)
+    }
+
+    carregar()
+  }
+
   async function handleCartao(jogadorId: string, tipo: TipoCartao) {
     if (!partidaId) return
     setErro(null)
@@ -387,6 +433,7 @@ export function PartidaDetailPage() {
   const placarA = ehVolei ? (setAtual?.placar_a ?? 0) : partida.placar_a
   const placarB = ehVolei ? (setAtual?.placar_b ?? 0) : partida.placar_b
   const finalizada = partida.status === 'finalizada'
+  const umSetSo = ehVolei && (racha.config as ConfigVolei).num_sets === 1
   const cronometroSegundos = segundosAoVivo(partida, agora)
 
   return (
@@ -403,7 +450,7 @@ export function PartidaDetailPage() {
 
         <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-6 text-center">
           {finalizada && <p className="mb-2 text-sm font-medium text-emerald-400">Partida finalizada</p>}
-          {ehVolei && (
+          {ehVolei && !umSetSo && (
             <p className="mb-1 text-sm text-neutral-400">
               Sets: {partida.placar_a} - {partida.placar_b}
               {setAtual && ` · Set ${setAtual.numero}`}
@@ -455,6 +502,15 @@ export function PartidaDetailPage() {
             </div>
           </div>
         </div>
+
+        {souOrganizador && !finalizada && placarA + placarB > 0 && (
+          <button
+            onClick={handleDesfazerUltimoPonto}
+            className="text-sm text-neutral-400 hover:text-neutral-200"
+          >
+            ↩ Desfazer último ponto
+          </button>
+        )}
 
         {erro && <p className="text-sm text-red-400">{erro}</p>}
 

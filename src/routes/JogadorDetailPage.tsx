@@ -108,7 +108,7 @@ export function JogadorDetailPage() {
       if (partidaIdsDoJogador.length > 0) {
         const { data: eventosData, error: erroEventos } = await supabase
           .from('eventos_ponto')
-          .select('partida_id, jogador_id, motivo, jogadores(nome)')
+          .select('partida_id, jogador_id, motivo, jogadores!eventos_ponto_jogador_id_fkey(nome)')
           .eq('jogador_id', jogadorId)
           .in('partida_id', partidaIdsDoJogador)
 

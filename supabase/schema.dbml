@@ -44,6 +44,7 @@ Table rachas {
   data_hora timestamptz [not null]
   local text
   limite_jogadores int [note: 'null = sem limite; acima disso, presença entra em lista de espera']
+  finalizado boolean [not null, default: false, note: 'manual; data_hora passada tambem conta como finalizado, ver lib/racha.ts']
   created_at timestamptz [not null, default: `now()`]
 }
 

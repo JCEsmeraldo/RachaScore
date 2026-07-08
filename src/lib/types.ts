@@ -42,6 +42,7 @@ export type Racha = {
   data_hora: string
   local: string | null
   limite_jogadores: number | null
+  finalizado: boolean
   created_at: string
 }
 

@@ -51,6 +51,7 @@ create table rachas (
   data_hora timestamptz not null,
   local text,
   limite_jogadores int, -- null = sem limite; acima disso, presença entra em lista de espera
+  finalizado boolean not null default false, -- marcado manualmente pelo organizador; rachas com data_hora passada contam como finalizado mesmo sem essa flag (ver lib/racha.ts)
   created_at timestamptz not null default now()
 );
 

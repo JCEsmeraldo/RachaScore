@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
+import { rachaFinalizado } from '../lib/racha'
 import type { Grupo, MembroComJogador, Racha } from '../lib/types'
 
 export function RachasPage() {
@@ -13,6 +14,7 @@ export function RachasPage() {
   const [souOrganizador, setSouOrganizador] = useState(false)
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
+  const [mostrarFinalizados, setMostrarFinalizados] = useState(false)
 
   useEffect(() => {
     async function carregar() {
@@ -76,28 +78,56 @@ export function RachasPage() {
 
         {erro && <p className="text-sm text-red-400">{erro}</p>}
 
-        {loading ? (
-          <p className="text-neutral-400">Carregando...</p>
-        ) : rachas.length === 0 ? (
-          <p className="text-sm text-neutral-500">Nenhum racha ainda.</p>
-        ) : (
-          <ul className="space-y-2">
-            {rachas.map((racha) => (
-              <li key={racha.id}>
-                <Link
-                  to={`/grupos/${grupoId}/rachas/${racha.id}`}
-                  className="block rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3 hover:border-neutral-700"
+        {(() => {
+          const ativos = rachas.filter((r) => !rachaFinalizado(r))
+          const finalizados = rachas.filter((r) => rachaFinalizado(r))
+          const visiveis = mostrarFinalizados ? rachas : ativos
+
+          return (
+            <>
+              {finalizados.length > 0 && (
+                <button
+                  onClick={() => setMostrarFinalizados((v) => !v)}
+                  className="text-sm text-neutral-400 hover:text-neutral-200"
                 >
-                  <span className="capitalize">{racha.modalidade}</span>
-                  <span className="text-neutral-500"> · {racha.modo === 'torneio' ? 'Torneio' : 'Rápido'} · </span>
-                  <span className="text-neutral-400">
-                    {new Date(racha.data_hora).toLocaleDateString('pt-BR')}
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
+                  {mostrarFinalizados
+                    ? 'Ocultar finalizados'
+                    : `Mostrar finalizados (${finalizados.length})`}
+                </button>
+              )}
+
+              {loading ? (
+                <p className="text-neutral-400">Carregando...</p>
+              ) : rachas.length === 0 ? (
+                <p className="text-sm text-neutral-500">Nenhum racha ainda.</p>
+              ) : visiveis.length === 0 ? (
+                <p className="text-sm text-neutral-500">Nenhum racha em aberto.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {visiveis.map((racha) => (
+                    <li key={racha.id}>
+                      <Link
+                        to={`/grupos/${grupoId}/rachas/${racha.id}`}
+                        className="block rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3 hover:border-neutral-700"
+                      >
+                        <span className="capitalize">{racha.modalidade}</span>
+                        <span className="text-neutral-500"> · {racha.modo === 'torneio' ? 'Torneio' : 'Rápido'} · </span>
+                        <span className="text-neutral-400">
+                          {new Date(racha.data_hora).toLocaleDateString('pt-BR')}
+                        </span>
+                        {rachaFinalizado(racha) && (
+                          <span className="ml-2 rounded-full bg-neutral-800 px-2 py-0.5 text-xs text-neutral-500">
+                            Finalizado
+                          </span>
+                        )}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
+          )
+        })()}
       </div>
     </div>
   )

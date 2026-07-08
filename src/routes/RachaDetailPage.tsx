@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { compartilhar, gerarTextoCompartilhar } from '../lib/compartilhar'
+import { rachaFinalizado } from '../lib/racha'
+import { useSouOrganizador } from '../lib/useSouOrganizador'
 import type { ConfigFutebol, ConfigVolei, PresencaComJogador, Racha } from '../lib/types'
 
 function resumoConfig(racha: Racha) {
@@ -18,6 +20,7 @@ function resumoConfig(racha: Racha) {
 
 export function RachaDetailPage() {
   const { grupoId, rachaId } = useParams<{ grupoId: string; rachaId: string }>()
+  const souOrganizador = useSouOrganizador(grupoId)
 
   const [racha, setRacha] = useState<Racha | null>(null)
   const [totalConfirmados, setTotalConfirmados] = useState(0)
@@ -120,6 +123,23 @@ export function RachaDetailPage() {
     }
   }
 
+  async function handleAlternarFinalizado() {
+    if (!rachaId || !racha) return
+    setErro(null)
+
+    const { error } = await supabase
+      .from('rachas')
+      .update({ finalizado: !racha.finalizado })
+      .eq('id', rachaId)
+
+    if (error) {
+      setErro(error.message)
+      return
+    }
+
+    setRacha({ ...racha, finalizado: !racha.finalizado })
+  }
+
   return (
     <div className="min-h-svh bg-neutral-950 px-4 py-6 text-white">
       <div className="mx-auto max-w-md space-y-6">
@@ -147,6 +167,11 @@ export function RachaDetailPage() {
                   {copiado ? 'Copiado!' : 'Compartilhar'}
                 </button>
               </div>
+              {rachaFinalizado(racha) && (
+                <span className="inline-block rounded-full bg-neutral-800 px-2 py-0.5 text-xs text-neutral-400">
+                  Finalizado
+                </span>
+              )}
               <p className="text-sm text-neutral-400">
                 {new Date(racha.data_hora).toLocaleString('pt-BR', {
                   dateStyle: 'short',
@@ -156,6 +181,23 @@ export function RachaDetailPage() {
               </p>
               <p className="text-sm text-neutral-300">Times de {racha.tamanho_equipe} jogadores</p>
               <p className="text-sm text-neutral-300">{resumoConfig(racha)}</p>
+
+              {souOrganizador && (
+                <div className="flex gap-3 pt-1">
+                  <Link
+                    to={`/grupos/${grupoId}/rachas/${rachaId}/editar`}
+                    className="text-sm text-neutral-400 hover:text-neutral-200"
+                  >
+                    Editar
+                  </Link>
+                  <button
+                    onClick={handleAlternarFinalizado}
+                    className="text-sm text-neutral-400 hover:text-neutral-200"
+                  >
+                    {racha.finalizado ? 'Reabrir racha' : 'Marcar como finalizado'}
+                  </button>
+                </div>
+              )}
             </div>
 
             {erro && <p className="text-sm text-red-400">{erro}</p>}

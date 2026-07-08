@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
+import { montarTabelaMotivos } from '../lib/estatisticas'
+import { TabelaMotivos } from '../components/TabelaMotivos'
 import type {
   Cartao,
   ConfigFutebol,
@@ -16,6 +18,15 @@ import type {
 } from '../lib/types'
 
 type JogadorTime = { jogador_id: string; nome: string }
+
+type EventoSumula = {
+  partida_id: string
+  time_id: string
+  jogador_id: string | null
+  motivo: MotivoPonto | null
+  jogadores: { nome: string } | null
+  assistente: { nome: string } | null
+}
 
 const MOTIVOS: { valor: MotivoPonto; label: string }[] = [
   { valor: 'ataque', label: 'Ataque' },
@@ -63,6 +74,7 @@ export function PartidaDetailPage() {
   const [expandido, setExpandido] = useState<string | null>(null)
   const [agora, setAgora] = useState(() => Date.now())
   const [cartoes, setCartoes] = useState<Cartao[]>([])
+  const [eventos, setEventos] = useState<EventoSumula[]>([])
 
   async function carregar() {
     if (!partidaId || !rachaId) return
@@ -95,6 +107,7 @@ export function PartidaDetailPage() {
       { data: setsData },
       { data: escalacaoData },
       { data: cartoesData },
+      { data: eventosData },
     ] = await Promise.all([
       supabase.from('grupos').select('*').eq('id', rachaData.grupo_id).single(),
       supabase
@@ -120,12 +133,20 @@ export function PartidaDetailPage() {
         .from('escalacoes_partida')
         .select('jogador_id, time_id, jogadores(nome)')
         .eq('partida_id', partidaId),
-      supabase.from('cartoes').select('*').eq('partida_id', partidaId),
+      supabase.from('cartoes').select('*, jogadores(nome)').eq('partida_id', partidaId),
+      supabase
+        .from('eventos_ponto')
+        .select(
+          'partida_id, time_id, jogador_id, motivo, jogadores!eventos_ponto_jogador_id_fkey(nome), assistente:jogadores!eventos_ponto_assistencia_jogador_id_fkey(nome)',
+        )
+        .eq('partida_id', partidaId)
+        .order('created_at', { ascending: true }),
     ])
 
     setTimeA(timeAData)
     setTimeB(timeBData)
     setCartoes(cartoesData ?? [])
+    setEventos((eventosData ?? []) as unknown as EventoSumula[])
 
     const escalacao = (escalacaoData ?? []) as unknown as EscalacaoComJogador[]
 
@@ -714,6 +735,60 @@ export function PartidaDetailPage() {
                 Set {s.numero}: {s.placar_a} - {s.placar_b}
               </p>
             ))}
+          </div>
+        )}
+
+        {finalizada && (
+          <div className="space-y-4">
+            <h3 className="text-sm font-medium text-neutral-400">Súmula</h3>
+
+            {ehVolei ? (
+              <TabelaMotivos linhas={montarTabelaMotivos(eventos)} mostrarJogos={false} />
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { time: timeA, id: partida.time_a_id },
+                    { time: timeB, id: partida.time_b_id },
+                  ].map(({ time, id }) => (
+                    <div key={id} className="space-y-1 rounded-lg border border-neutral-800 bg-neutral-900 p-3">
+                      <h4 className="text-xs font-medium text-neutral-500">{time?.nome}</h4>
+                      {eventos.filter((e) => e.time_id === id).length === 0 ? (
+                        <p className="text-xs text-neutral-600">Sem gols</p>
+                      ) : (
+                        eventos
+                          .filter((e) => e.time_id === id)
+                          .map((e, i) => (
+                            <p key={i} className="text-sm text-neutral-300">
+                              ⚽ {e.jogadores?.nome ?? 'Sem autor'}
+                              {e.assistente && <span className="text-neutral-500"> (assist. {e.assistente.nome})</span>}
+                            </p>
+                          ))
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {cartoes.length > 0 && (
+                  <div className="space-y-1 rounded-lg border border-neutral-800 bg-neutral-900 p-3">
+                    <h4 className="text-xs font-medium text-neutral-500">Cartões</h4>
+                    {[...new Set(cartoes.map((c) => c.jogador_id))].map((jogadorId) => {
+                      const nome = (cartoes.find((c) => c.jogador_id === jogadorId) as unknown as {
+                        jogadores: { nome: string } | null
+                      })?.jogadores?.nome ?? '?'
+                      const { amarelo, vermelho } = cartoesDoJogador(jogadorId)
+                      return (
+                        <p key={jogadorId} className="text-sm text-neutral-300">
+                          {nome}
+                          {amarelo > 0 && ` 🟨${amarelo > 1 ? amarelo : ''}`}
+                          {vermelho > 0 && ' 🟥'}
+                        </p>
+                      )
+                    })}
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
       </div>

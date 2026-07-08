@@ -6,6 +6,7 @@ import { MembrosPage } from './routes/MembrosPage'
 import { RachasPage } from './routes/RachasPage'
 import { ConvitePage } from './routes/ConvitePage'
 import { CriarRachaPage } from './routes/CriarRachaPage'
+import { EditarRachaPage } from './routes/EditarRachaPage'
 import { RachaDetailPage } from './routes/RachaDetailPage'
 import { PresencaPage } from './routes/PresencaPage'
 import { TimesPage } from './routes/TimesPage'
@@ -32,6 +33,7 @@ function App() {
         <Route path="/grupos/:grupoId/rachas" element={<RachasPage />} />
         <Route path="/grupos/:grupoId/rachas/novo" element={<CriarRachaPage />} />
         <Route path="/grupos/:grupoId/rachas/:rachaId" element={<RachaDetailPage />} />
+        <Route path="/grupos/:grupoId/rachas/:rachaId/editar" element={<EditarRachaPage />} />
         <Route path="/grupos/:grupoId/rachas/:rachaId/presenca" element={<PresencaPage />} />
         <Route path="/grupos/:grupoId/rachas/:rachaId/times" element={<TimesPage />} />
         <Route path="/grupos/:grupoId/rachas/:rachaId/partidas" element={<PartidasPage />} />

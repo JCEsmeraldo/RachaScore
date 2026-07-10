@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
@@ -75,10 +75,31 @@ export function PartidaDetailPage() {
   const [agora, setAgora] = useState(() => Date.now())
   const [cartoes, setCartoes] = useState<Cartao[]>([])
   const [eventos, setEventos] = useState<EventoSumula[]>([])
+  const [salvando, setSalvando] = useState(false)
+  const primeiraCarga = useRef(true)
+  // useState sozinho não trava a tempo: cliques em rajada (duplo clique, toque
+  // fantasma) rodam todos no mesmo tick, antes do react re-renderizar com
+  // salvando=true — o ref é síncrono e barra o 2º clique na hora
+  const salvandoRef = useRef(false)
+
+  function travar() {
+    if (salvandoRef.current) return false
+    salvandoRef.current = true
+    setSalvando(true)
+    return true
+  }
+
+  function destravar() {
+    salvandoRef.current = false
+    setSalvando(false)
+  }
 
   async function carregar() {
     if (!partidaId || !rachaId) return
-    setLoading(true)
+    // só mostra a tela de "Carregando..." na primeira vez — atualizações depois
+    // (após marcar ponto, ou via Realtime) trocam os dados por baixo dos panos,
+    // sem desmontar a tela inteira
+    if (primeiraCarga.current) setLoading(true)
 
     const { data: partidaData, error: erroPartida } = await supabase
       .from('partidas')
@@ -183,6 +204,7 @@ export function PartidaDetailPage() {
     }
 
     setLoading(false)
+    primeiraCarga.current = false
   }
 
   useEffect(() => {
@@ -241,7 +263,7 @@ export function PartidaDetailPage() {
     motivo: MotivoPonto | null,
     assistenciaJogadorId: string | null = null,
   ) {
-    if (!partidaId || !partida || !racha) return
+    if (!partidaId || !partida || !racha || !travar()) return
     setErro(null)
 
     const ehVolei = racha.modalidade === 'volei'
@@ -258,6 +280,7 @@ export function PartidaDetailPage() {
 
     if (erroEvento) {
       setErro(erroEvento.message)
+      destravar()
       return
     }
 
@@ -275,11 +298,12 @@ export function PartidaDetailPage() {
         .eq('id', partidaId)
     }
 
-    carregar()
+    await carregar()
+    destravar()
   }
 
   async function handleDesfazerUltimoPonto() {
-    if (!partidaId || !partida || !racha) return
+    if (!partidaId || !partida || !racha || !travar()) return
     setErro(null)
 
     const ehVolei = racha.modalidade === 'volei'
@@ -294,15 +318,20 @@ export function PartidaDetailPage() {
 
     if (erroBusca) {
       setErro(erroBusca.message)
+      destravar()
       return
     }
 
-    if (!ultimoEvento) return
+    if (!ultimoEvento) {
+      destravar()
+      return
+    }
 
     const { error: erroDelete } = await supabase.from('eventos_ponto').delete().eq('id', ultimoEvento.id)
 
     if (erroDelete) {
       setErro(erroDelete.message)
+      destravar()
       return
     }
 
@@ -321,21 +350,24 @@ export function PartidaDetailPage() {
         .eq('id', partidaId)
     }
 
-    carregar()
+    await carregar()
+    destravar()
   }
 
   async function handleCartao(jogadorId: string, tipo: TipoCartao) {
-    if (!partidaId) return
+    if (!partidaId || !travar()) return
     setErro(null)
 
     const { error } = await supabase.from('cartoes').insert({ partida_id: partidaId, jogador_id: jogadorId, tipo })
 
     if (error) {
       setErro(error.message)
+      destravar()
       return
     }
 
-    carregar()
+    await carregar()
+    destravar()
   }
 
   function cartoesDoJogador(jogadorId: string) {
@@ -527,7 +559,8 @@ export function PartidaDetailPage() {
         {souOrganizador && !finalizada && placarA + placarB > 0 && (
           <button
             onClick={handleDesfazerUltimoPonto}
-            className="text-sm text-neutral-400 hover:text-neutral-200"
+            disabled={salvando}
+            className="text-sm text-neutral-400 hover:text-neutral-200 disabled:opacity-50"
           >
             ↩ Desfazer último ponto
           </button>
@@ -537,7 +570,7 @@ export function PartidaDetailPage() {
 
         {souOrganizador && !finalizada && (
           <>
-            <div className="grid grid-cols-2 gap-3">
+            <fieldset disabled={salvando} className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <h3 className="text-sm font-medium text-neutral-400">{timeA.nome}</h3>
                 {jogadoresA.map((j) => {
@@ -707,19 +740,21 @@ export function PartidaDetailPage() {
                   +1 sem autor
                 </button>
               </div>
-            </div>
+            </fieldset>
 
             {ehVolei ? (
               <button
                 onClick={handleFecharSet}
-                className="w-full rounded-lg bg-emerald-500 py-2 font-medium text-neutral-950"
+                disabled={salvando}
+                className="w-full rounded-lg bg-emerald-500 py-2 font-medium text-neutral-950 disabled:opacity-50"
               >
                 Fechar set
               </button>
             ) : (
               <button
                 onClick={handleEncerrarPartida}
-                className="w-full rounded-lg bg-emerald-500 py-2 font-medium text-neutral-950"
+                disabled={salvando}
+                className="w-full rounded-lg bg-emerald-500 py-2 font-medium text-neutral-950 disabled:opacity-50"
               >
                 Encerrar partida
               </button>

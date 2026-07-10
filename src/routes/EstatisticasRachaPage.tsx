@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
-import { montarTabelaMotivos, type LinhaMotivo } from '../lib/estatisticas'
+import { contarJogosEVitorias, montarTabelaMotivos, type LinhaMotivo } from '../lib/estatisticas'
 import { TabelaMotivos } from '../components/TabelaMotivos'
 import type { ClassificacaoTime, Racha } from '../lib/types'
 
@@ -35,7 +35,10 @@ export function EstatisticasRachaPage() {
       setRacha(rachaData)
 
       const [{ data: partidasData }, { data: classificacaoData, error: erroClass }] = await Promise.all([
-        supabase.from('partidas').select('id').eq('racha_id', rachaId),
+        supabase
+          .from('partidas')
+          .select('id, racha_id, time_a_id, time_b_id, vencedor_id, status')
+          .eq('racha_id', rachaId),
         rachaData.modo === 'torneio'
           ? supabase
               .from('classificacao_racha')
@@ -49,13 +52,26 @@ export function EstatisticasRachaPage() {
       if (erroClass) setErro(erroClass.message)
       setClassificacao((classificacaoData as ClassificacaoTime[]) ?? [])
 
-      const partidaIds = (partidasData ?? []).map((p) => p.id)
+      const partidas = partidasData ?? []
+      const partidaIds = partidas.map((p) => p.id)
 
       if (partidaIds.length > 0) {
-        const { data: eventosData, error: erroEventos } = await supabase
-          .from('eventos_ponto')
-          .select('partida_id, jogador_id, motivo, jogadores!eventos_ponto_jogador_id_fkey(nome)')
-          .in('partida_id', partidaIds)
+        const [{ data: eventosData, error: erroEventos }, { data: escalacoesData }, { data: presencasData }] =
+          await Promise.all([
+            supabase
+              .from('eventos_ponto')
+              .select('partida_id, jogador_id, motivo, jogadores!eventos_ponto_jogador_id_fkey(nome)')
+              .in('partida_id', partidaIds),
+            supabase
+              .from('escalacoes_partida')
+              .select('partida_id, jogador_id, time_id')
+              .in('partida_id', partidaIds),
+            supabase
+              .from('presencas_racha')
+              .select('jogador_id, time_id, jogadores(nome)')
+              .eq('racha_id', rachaId)
+              .eq('status', 'confirmado'),
+          ])
 
         if (erroEventos) {
           setErro(erroEventos.message)
@@ -79,7 +95,34 @@ export function EstatisticasRachaPage() {
           )
 
           if (rachaData.modalidade === 'volei') {
-            setMotivos(montarTabelaMotivos(eventos))
+            const presencas = (presencasData ?? []) as unknown as {
+              jogador_id: string
+              time_id: string | null
+              jogadores: { nome: string } | null
+            }[]
+
+            const statsPorJogadorId = contarJogosEVitorias(
+              partidas,
+              escalacoesData ?? [],
+              presencas.map((p) => ({ racha_id: rachaId, jogador_id: p.jogador_id, time_id: p.time_id })),
+            )
+
+            const nomePorJogadorId = new Map(presencas.map((p) => [p.jogador_id, p.jogadores?.nome ?? '?']))
+            const statsPorNome = new Map<string, { jogos: number; vitorias: number }>()
+            for (const [jogadorId, stats] of statsPorJogadorId) {
+              const nome = nomePorJogadorId.get(jogadorId)
+              if (!nome) continue
+              const atual = statsPorNome.get(nome) ?? { jogos: 0, vitorias: 0 }
+              statsPorNome.set(nome, { jogos: atual.jogos + stats.jogos, vitorias: atual.vitorias + stats.vitorias })
+            }
+
+            setMotivos(
+              montarTabelaMotivos(eventos).map((linha) =>
+                linha.nome === 'Sem autor'
+                  ? linha
+                  : { ...linha, ...(statsPorNome.get(linha.nome) ?? { jogos: 0, vitorias: 0 }) },
+              ),
+            )
           }
         }
       }
@@ -169,7 +212,7 @@ export function EstatisticasRachaPage() {
 
             {racha?.modalidade === 'volei' && (
               <div className="space-y-2">
-                <TabelaMotivos linhas={motivos} />
+                <TabelaMotivos linhas={motivos} mostrarMvp mostrarExportar />
               </div>
             )}
           </>

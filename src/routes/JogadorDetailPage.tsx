@@ -192,7 +192,7 @@ export function JogadorDetailPage() {
 
         {mostrarMotivo && stats.jogos > 0 && (
           <div className="space-y-1">
-            <TabelaMotivos linhas={stats.motivos} mostrarJogador={false} mostrarJogos={false} />
+            <TabelaMotivos linhas={stats.motivos} mostrarJogador={false} mostrarJogos={false} mostrarVitorias={false} />
           </div>
         )}
       </div>

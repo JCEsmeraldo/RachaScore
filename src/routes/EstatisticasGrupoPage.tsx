@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
-import { montarTabelaMotivos, type LinhaMotivo } from '../lib/estatisticas'
+import { contarJogosEVitorias, montarTabelaMotivos, type LinhaMotivo } from '../lib/estatisticas'
 import { TabelaMotivos } from '../components/TabelaMotivos'
 
 type EventoParaMotivo = {
@@ -57,7 +57,7 @@ export function EstatisticasGrupoPage() {
 
       const { data: partidasData, error: erroPartidas } = await supabase
         .from('partidas')
-        .select('id, racha_id, status')
+        .select('id, racha_id, time_a_id, time_b_id, vencedor_id, status')
         .in('racha_id', rachaIds)
 
       if (erroPartidas) {
@@ -91,11 +91,25 @@ export function EstatisticasGrupoPage() {
         if (modalidade) contadores[modalidade].partidasFinalizadas += 1
       }
 
+      let motivosVolei: LinhaMotivo[] = []
+
       if (partidaIds.length > 0) {
-        const { data: eventosData, error: erroEventos } = await supabase
-          .from('eventos_ponto')
-          .select('partida_id, jogador_id, motivo, jogadores!eventos_ponto_jogador_id_fkey(nome)')
-          .in('partida_id', partidaIds)
+        const [{ data: eventosData, error: erroEventos }, { data: escalacoesData }, { data: presencasData }] =
+          await Promise.all([
+            supabase
+              .from('eventos_ponto')
+              .select('partida_id, jogador_id, motivo, jogadores!eventos_ponto_jogador_id_fkey(nome)')
+              .in('partida_id', partidaIds),
+            supabase
+              .from('escalacoes_partida')
+              .select('partida_id, jogador_id, time_id')
+              .in('partida_id', partidaIds),
+            supabase
+              .from('presencas_racha')
+              .select('racha_id, jogador_id, time_id, jogadores(nome)')
+              .in('racha_id', rachaIds)
+              .eq('status', 'confirmado'),
+          ])
 
         if (erroEventos) {
           setErro(erroEventos.message)
@@ -115,6 +129,38 @@ export function EstatisticasGrupoPage() {
               contadores.volei.eventos.push(ev)
             }
           }
+
+          // "jogos" real (partida em que o jogador jogou) em vez de "partida em
+          // que pontuou" — só precisa pro vôlei, que é quem mostra essa coluna
+          const partidasVolei = partidas.filter((p) => partidaModalidade.get(p.id) === 'volei')
+          const rachasVolei = new Set(rachas.filter((r) => r.modalidade === 'volei').map((r) => r.id))
+          const presencas = ((presencasData ?? []) as unknown as {
+            racha_id: string
+            jogador_id: string
+            time_id: string | null
+            jogadores: { nome: string } | null
+          }[]).filter((p) => rachasVolei.has(p.racha_id))
+
+          const statsPorJogadorId = contarJogosEVitorias(
+            partidasVolei,
+            (escalacoesData ?? []).filter((e) => partidasVolei.some((p) => p.id === e.partida_id)),
+            presencas,
+          )
+
+          const nomePorJogadorId = new Map(presencas.map((p) => [p.jogador_id, p.jogadores?.nome ?? '?']))
+          const statsPorNome = new Map<string, { jogos: number; vitorias: number }>()
+          for (const [jogadorId, stats] of statsPorJogadorId) {
+            const nome = nomePorJogadorId.get(jogadorId)
+            if (!nome) continue
+            const atual = statsPorNome.get(nome) ?? { jogos: 0, vitorias: 0 }
+            statsPorNome.set(nome, { jogos: atual.jogos + stats.jogos, vitorias: atual.vitorias + stats.vitorias })
+          }
+
+          motivosVolei = montarTabelaMotivos(contadores.volei.eventos).map((linha) =>
+            linha.nome === 'Sem autor'
+              ? linha
+              : { ...linha, ...(statsPorNome.get(linha.nome) ?? { jogos: 0, vitorias: 0 }) },
+          )
         }
       }
 
@@ -133,7 +179,7 @@ export function EstatisticasGrupoPage() {
         pontuadores: [...contadores.volei.pontuadores.entries()]
           .map(([nome, total]) => ({ nome, total }))
           .sort((a, b) => b.total - a.total),
-        motivos: montarTabelaMotivos(contadores.volei.eventos),
+        motivos: motivosVolei,
       })
 
       setLoading(false)
@@ -175,7 +221,7 @@ export function EstatisticasGrupoPage() {
 
         {mostrarMotivo && (
           <div className="space-y-1">
-            <TabelaMotivos linhas={stats.motivos} />
+            <TabelaMotivos linhas={stats.motivos} mostrarExportar />
           </div>
         )}
       </div>

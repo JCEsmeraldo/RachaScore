@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { supabase } from '../lib/supabaseClient'
 import { contarJogosEVitorias, montarTabelaMotivos, type LinhaMotivo } from '../lib/estatisticas'
 import { TabelaMotivos } from '../components/TabelaMotivos'
 import type { ClassificacaoTime, Racha } from '../lib/types'
+
+type EventoComPartida = { partida_id: string; jogador_id: string | null; jogadores: { nome: string } | null }
 
 export function EstatisticasRachaPage() {
   const { grupoId, rachaId } = useParams<{ grupoId: string; rachaId: string }>()
@@ -12,6 +15,9 @@ export function EstatisticasRachaPage() {
   const [classificacao, setClassificacao] = useState<ClassificacaoTime[]>([])
   const [pontuadores, setPontuadores] = useState<{ nome: string; total: number }[]>([])
   const [motivos, setMotivos] = useState<LinhaMotivo[]>([])
+  const [eventos, setEventos] = useState<EventoComPartida[]>([])
+  const [partidaIdsOrdenadas, setPartidaIdsOrdenadas] = useState<string[]>([])
+  const [jogadorAberto, setJogadorAberto] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
 
@@ -37,8 +43,9 @@ export function EstatisticasRachaPage() {
       const [{ data: partidasData }, { data: classificacaoData, error: erroClass }] = await Promise.all([
         supabase
           .from('partidas')
-          .select('id, racha_id, time_a_id, time_b_id, vencedor_id, status')
-          .eq('racha_id', rachaId),
+          .select('id, racha_id, time_a_id, time_b_id, vencedor_id, status, created_at')
+          .eq('racha_id', rachaId)
+          .order('created_at', { ascending: true }),
         rachaData.modo === 'torneio'
           ? supabase
               .from('classificacao_racha')
@@ -54,6 +61,7 @@ export function EstatisticasRachaPage() {
 
       const partidas = partidasData ?? []
       const partidaIds = partidas.map((p) => p.id)
+      setPartidaIdsOrdenadas(partidaIds)
 
       if (partidaIds.length > 0) {
         const [{ data: eventosData, error: erroEventos }, { data: escalacoesData }, { data: presencasData }] =
@@ -82,6 +90,8 @@ export function EstatisticasRachaPage() {
             motivo: string | null
             jogadores: { nome: string } | null
           }[]
+
+          setEventos(eventos)
 
           const porJogador = new Map<string, number>()
           for (const ev of eventos) {
@@ -134,6 +144,18 @@ export function EstatisticasRachaPage() {
   }, [rachaId])
 
   const labelPontuador = racha?.modalidade === 'volei' ? 'Maiores pontuadores' : 'Artilheiros'
+
+  const evolucaoPorPartida = useMemo(() => {
+    if (!jogadorAberto) return []
+    const porPartida = new Map<string, number>()
+    for (const ev of eventos) {
+      if (ev.jogadores?.nome !== jogadorAberto) continue
+      porPartida.set(ev.partida_id, (porPartida.get(ev.partida_id) ?? 0) + 1)
+    }
+    return partidaIdsOrdenadas
+      .map((id, i) => ({ partida: `P${i + 1}`, pontos: porPartida.get(id) ?? 0 }))
+      .filter((p) => p.pontos > 0)
+  }, [jogadorAberto, eventos, partidaIdsOrdenadas])
 
   return (
     <div className="min-h-svh bg-neutral-950 px-4 py-6 text-white">
@@ -212,7 +234,45 @@ export function EstatisticasRachaPage() {
 
             {racha?.modalidade === 'volei' && (
               <div className="space-y-2">
-                <TabelaMotivos linhas={motivos} mostrarMvp mostrarExportar />
+                <TabelaMotivos
+                  linhas={motivos}
+                  mostrarMvp
+                  mostrarExportar
+                  aoClicarJogador={(nome) => setJogadorAberto((atual) => (atual === nome ? null : nome))}
+                  jogadorSelecionado={jogadorAberto}
+                />
+
+                {jogadorAberto && (
+                  <div className="space-y-1 rounded-lg border border-neutral-800 bg-neutral-900 p-4">
+                    <p className="text-sm text-neutral-400">Pontos por partida — {jogadorAberto}</p>
+                    {evolucaoPorPartida.length === 0 ? (
+                      <p className="text-sm text-neutral-500">Nenhum ponto registrado.</p>
+                    ) : (
+                      <div className="h-40 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={evolucaoPorPartida} margin={{ top: 8, right: 12, bottom: 0, left: -20 }}>
+                            <CartesianGrid stroke="#262626" strokeDasharray="3 3" vertical={false} />
+                            <XAxis dataKey="partida" stroke="#737373" fontSize={12} tickLine={false} />
+                            <YAxis stroke="#737373" fontSize={12} allowDecimals={false} tickLine={false} />
+                            <Tooltip
+                              contentStyle={{ background: '#171717', border: '1px solid #262626', borderRadius: 8 }}
+                              labelStyle={{ color: '#a3a3a3' }}
+                              itemStyle={{ color: '#fff' }}
+                            />
+                            <Line
+                              type="monotone"
+                              dataKey="pontos"
+                              name="Pontos"
+                              stroke="#34d399"
+                              strokeWidth={2}
+                              dot={{ fill: '#34d399', r: 3 }}
+                            />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </>

@@ -81,6 +81,20 @@ export function JogadorDetailPage() {
 
       const timePorRacha = new Map((presencasData ?? []).map((p) => [p.racha_id, p.time_id]))
       const partidas = partidasData ?? []
+      const partidaIds = partidas.map((p) => p.id)
+
+      // no torneio o time do jogador pode mudar a cada partida (escalação por partida);
+      // presencas_racha só guarda 1 time fixo pro racha inteiro, que só serve de fallback
+      const { data: escalacoesData } =
+        partidaIds.length > 0
+          ? await supabase
+              .from('escalacoes_partida')
+              .select('partida_id, time_id')
+              .eq('jogador_id', jogadorId)
+              .in('partida_id', partidaIds)
+          : { data: [] }
+
+      const timePorPartida = new Map((escalacoesData ?? []).map((e) => [e.partida_id, e.time_id]))
 
       const contadores = {
         futebol: statsVazio(),
@@ -92,7 +106,7 @@ export function JogadorDetailPage() {
       const partidaIdsDoJogador: string[] = []
 
       for (const partida of partidas) {
-        const meuTimeId = timePorRacha.get(partida.racha_id)
+        const meuTimeId = timePorPartida.get(partida.id) ?? timePorRacha.get(partida.racha_id)
         if (!meuTimeId) continue
         if (partida.time_a_id !== meuTimeId && partida.time_b_id !== meuTimeId) continue
 

@@ -129,22 +129,22 @@ export function TabelaMotivos({
                 className={`border-b border-neutral-800 last:border-0 ${linha.nome === jogadorSelecionado ? 'bg-neutral-800/60' : ''}`}
               >
                 {mostrarJogador && (
-                  <td className="px-2 py-2 text-left">
+                  <td className="whitespace-nowrap px-2 py-2 text-left">
+                    {linha.nome === mvpNome && (
+                      <span className="text-amber-400" title="MVP">
+                        ★{' '}
+                      </span>
+                    )}
                     {aoClicarJogador && linha.nome !== 'Sem autor' ? (
                       <button
                         type="button"
                         onClick={() => aoClicarJogador(linha.nome)}
-                        className="underline decoration-dotted underline-offset-2 hover:text-neutral-200"
+                        className="text-left text-neutral-100 hover:text-emerald-400"
                       >
                         {linha.nome}
                       </button>
                     ) : (
                       linha.nome
-                    )}
-                    {linha.nome === mvpNome && (
-                      <span className="ml-1 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-400">
-                        MVP
-                      </span>
                     )}
                   </td>
                 )}

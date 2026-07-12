@@ -130,11 +130,6 @@ export function TabelaMotivos({
               >
                 {mostrarJogador && (
                   <td className="whitespace-nowrap px-2 py-2 text-left">
-                    {linha.nome === mvpNome && (
-                      <span className="text-amber-400" title="MVP">
-                        ★{' '}
-                      </span>
-                    )}
                     {aoClicarJogador && linha.nome !== 'Sem autor' ? (
                       <button
                         type="button"
@@ -145,6 +140,11 @@ export function TabelaMotivos({
                       </button>
                     ) : (
                       linha.nome
+                    )}
+                    {linha.nome === mvpNome && (
+                      <span className="ml-1 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-400">
+                        MVP
+                      </span>
                     )}
                   </td>
                 )}

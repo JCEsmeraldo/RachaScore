@@ -778,7 +778,7 @@ export function PartidaDetailPage() {
             <h3 className="text-sm font-medium text-neutral-400">Súmula</h3>
 
             {ehVolei ? (
-              <TabelaMotivos linhas={montarTabelaMotivos(eventos)} mostrarJogos={false} />
+              <TabelaMotivos linhas={montarTabelaMotivos(eventos)} mostrarJogos={false} mostrarVitorias={false} />
             ) : (
               <>
                 <div className="grid grid-cols-2 gap-3">

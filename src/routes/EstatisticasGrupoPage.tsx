@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { supabase } from '../lib/supabaseClient'
 import { contarJogosEVitorias, montarTabelaMotivos, type LinhaMotivo } from '../lib/estatisticas'
 import { TabelaMotivos } from '../components/TabelaMotivos'
@@ -27,6 +28,10 @@ export function EstatisticasGrupoPage() {
 
   const [futebol, setFutebol] = useState<StatsModalidade>(statsVazio())
   const [volei, setVolei] = useState<StatsModalidade>(statsVazio())
+  const [eventosVolei, setEventosVolei] = useState<EventoParaMotivo[]>([])
+  const [partidaRacha, setPartidaRacha] = useState<Map<string, string>>(new Map())
+  const [rachaDataHora, setRachaDataHora] = useState<Map<string, string>>(new Map())
+  const [jogadorAberto, setJogadorAberto] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
 
@@ -37,7 +42,7 @@ export function EstatisticasGrupoPage() {
 
       const { data: rachasData, error: erroRachas } = await supabase
         .from('rachas')
-        .select('id, modalidade')
+        .select('id, modalidade, data_hora')
         .eq('grupo_id', grupoId)
 
       if (erroRachas) {
@@ -49,6 +54,7 @@ export function EstatisticasGrupoPage() {
       const rachas = rachasData ?? []
       const rachaModalidade = new Map(rachas.map((r) => [r.id, r.modalidade]))
       const rachaIds = rachas.map((r) => r.id)
+      setRachaDataHora(new Map(rachas.map((r) => [r.id, r.data_hora])))
 
       if (rachaIds.length === 0) {
         setLoading(false)
@@ -69,6 +75,7 @@ export function EstatisticasGrupoPage() {
       const partidas = partidasData ?? []
       const partidaModalidade = new Map(partidas.map((p) => [p.id, rachaModalidade.get(p.racha_id)]))
       const partidaIds = partidas.map((p) => p.id)
+      setPartidaRacha(new Map(partidas.map((p) => [p.id, p.racha_id])))
 
       const contadores = {
         futebol: { rachas: new Set<string>(), partidasFinalizadas: 0, pontuadores: new Map<string, number>() },
@@ -161,6 +168,8 @@ export function EstatisticasGrupoPage() {
               ? linha
               : { ...linha, ...(statsPorNome.get(linha.nome) ?? { jogos: 0, vitorias: 0 }) },
           )
+
+          setEventosVolei(contadores.volei.eventos)
         }
       }
 
@@ -187,6 +196,24 @@ export function EstatisticasGrupoPage() {
 
     carregar()
   }, [grupoId])
+
+  const evolucaoPorRacha = useMemo(() => {
+    if (!jogadorAberto) return []
+    const porRacha = new Map<string, number>()
+    for (const ev of eventosVolei) {
+      if (ev.jogadores?.nome !== jogadorAberto) continue
+      const rachaId = partidaRacha.get(ev.partida_id)
+      if (!rachaId) continue
+      porRacha.set(rachaId, (porRacha.get(rachaId) ?? 0) + 1)
+    }
+    return [...porRacha.entries()]
+      .map(([rachaId, pontos]) => ({ pontos, dataHora: rachaDataHora.get(rachaId) ?? '' }))
+      .sort((a, b) => a.dataHora.localeCompare(b.dataHora))
+      .map((r) => ({
+        data: new Date(r.dataHora).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+        pontos: r.pontos,
+      }))
+  }, [jogadorAberto, eventosVolei, partidaRacha, rachaDataHora])
 
   function renderModalidade(nome: string, stats: StatsModalidade, labelPontuador: string, mostrarMotivo: boolean) {
     if (stats.totalRachas === 0) return null
@@ -221,7 +248,44 @@ export function EstatisticasGrupoPage() {
 
         {mostrarMotivo && (
           <div className="space-y-1">
-            <TabelaMotivos linhas={stats.motivos} mostrarExportar />
+            <TabelaMotivos
+              linhas={stats.motivos}
+              mostrarExportar
+              aoClicarJogador={(jogadorNome) => setJogadorAberto((atual) => (atual === jogadorNome ? null : jogadorNome))}
+              jogadorSelecionado={jogadorAberto}
+            />
+
+            {jogadorAberto && (
+              <div className="space-y-1 rounded-lg border border-neutral-800 bg-neutral-900 p-4">
+                <p className="text-sm text-neutral-400">Pontos por racha — {jogadorAberto}</p>
+                {evolucaoPorRacha.length === 0 ? (
+                  <p className="text-sm text-neutral-500">Nenhum ponto registrado.</p>
+                ) : (
+                  <div className="h-40 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={evolucaoPorRacha} margin={{ top: 8, right: 12, bottom: 0, left: -20 }}>
+                        <CartesianGrid stroke="#262626" strokeDasharray="3 3" vertical={false} />
+                        <XAxis dataKey="data" stroke="#737373" fontSize={12} tickLine={false} />
+                        <YAxis stroke="#737373" fontSize={12} allowDecimals={false} tickLine={false} />
+                        <Tooltip
+                          contentStyle={{ background: '#171717', border: '1px solid #262626', borderRadius: 8 }}
+                          labelStyle={{ color: '#a3a3a3' }}
+                          itemStyle={{ color: '#fff' }}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="pontos"
+                          name="Pontos"
+                          stroke="#34d399"
+                          strokeWidth={2}
+                          dot={{ fill: '#34d399', r: 3 }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -25,6 +25,7 @@ create table jogadores (
   nome text not null,
   user_id uuid references profiles(id),
   email text, -- convite pendente: linkado ao user_id automaticamente no signup (ver handle_new_user)
+  convite_token uuid unique, -- convite pessoal p/ assumir esse jogador avulso (ver gerar_convite_jogador); null = sem convite pendente
   created_at timestamptz not null default now()
 );
 

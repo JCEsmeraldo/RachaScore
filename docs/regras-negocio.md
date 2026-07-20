@@ -30,6 +30,7 @@ Cada racha (evento) é criado dentro de um grupo e define:
 - **Convite por link**: cada grupo tem um `convite_token` único; o link `/convite/:token` deixa qualquer pessoa entrar no grupo como membro fixo. Regenerar o token invalida links antigos.
 - Um link de convite pode carregar também o id de um racha (`?racha=...`) — quem entra pelo link já cai direto na tela de presença daquele racha.
 - Membros podem ter `is_admin`: mesmos poderes do dono do grupo, exceto apagar o grupo.
+- **Convite pessoal (assumir jogador)**: jogador fixo sem conta vinculada (`user_id is null`) pode receber um convite individual (`jogadores.convite_token`, link `/assumir/:token`) pra pessoa de verdade logar e assumir aquele jogador específico, preservando todo o histórico/estatísticas já registrado — em vez de entrar como jogador novo do zero. Só o dono/admin do grupo gera esse convite. Uma conta pode assumir jogadores de grupos diferentes sem problema; só é bloqueada se já for membro DESSE MESMO grupo com outro jogador (evita duplicar identidade dentro do grupo).
 
 ## 4. Presença por Racha
 

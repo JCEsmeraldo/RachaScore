@@ -20,6 +20,7 @@ Table jogadores {
   nome text [not null]
   user_id uuid [note: 'opcional - jogador pode não ter conta']
   email text [note: 'convite pendente; linkado ao user_id automaticamente no signup']
+  convite_token uuid [unique, note: 'convite pessoal p/ assumir jogador avulso; null = sem convite pendente']
   created_at timestamptz [not null, default: `now()`]
 }
 

@@ -333,6 +333,114 @@ $$;
 grant execute on function public.entrar_no_grupo(uuid) to authenticated;
 
 -- ============================================================
+-- RPC: convite pessoal — assumir um jogador avulso já existente
+-- ============================================================
+-- Cenário: jogador cadastrado avulso (sem conta) já tem histórico/estatísticas
+-- no grupo, e a pessoa de verdade quer logar aproveitando esse jogador em vez
+-- de criar um novo do zero. Token pessoal e secreto (diferente do convite do
+-- grupo, que é público) — só quem recebe o link consegue assumir aquele
+-- jogador específico.
+
+create or replace function public.gerar_convite_jogador(p_jogador_id uuid)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_grupo_id uuid;
+  v_token uuid;
+begin
+  select mg.grupo_id into v_grupo_id from membros_grupo mg where mg.jogador_id = p_jogador_id limit 1;
+
+  if v_grupo_id is null or not public.is_organizador_grupo(v_grupo_id) then
+    raise exception 'Somente o dono ou admin do grupo pode gerar esse convite';
+  end if;
+
+  if exists (select 1 from jogadores where id = p_jogador_id and user_id is not null) then
+    raise exception 'Esse jogador já tem conta vinculada';
+  end if;
+
+  select convite_token into v_token from jogadores where id = p_jogador_id;
+
+  if v_token is null then
+    v_token := gen_random_uuid();
+    update jogadores set convite_token = v_token where id = p_jogador_id;
+  end if;
+
+  return v_token;
+end;
+$$;
+
+grant execute on function public.gerar_convite_jogador(uuid) to authenticated;
+
+-- Prévia pública (antes de logar), mesma lógica de preview_convite.
+create or replace function public.preview_convite_jogador(p_token uuid)
+returns table(jogador_nome text, grupo_nome text)
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select j.nome, g.nome
+  from jogadores j
+  join membros_grupo mg on mg.jogador_id = j.id
+  join grupos g on g.id = mg.grupo_id
+  where j.convite_token = p_token and j.user_id is null
+  limit 1;
+$$;
+
+grant execute on function public.preview_convite_jogador(uuid) to anon, authenticated;
+
+-- Vincula a conta logada ao jogador do convite. Uma conta pode ter jogadores
+-- diferentes em grupos diferentes sem problema (estatísticas sempre ficam
+-- escopadas por grupo) — só bloqueia se a conta já for membro DESSE MESMO
+-- grupo com outro jogador (aí sim duplicaria identidade dentro do grupo), ou
+-- se o jogador do convite já tiver sido assumido por outra conta.
+create or replace function public.associar_conta_jogador(p_token uuid)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_jogador_id uuid;
+  v_grupo_id uuid;
+begin
+  if auth.uid() is null then
+    raise exception 'Precisa estar logado';
+  end if;
+
+  select id into v_jogador_id from jogadores where convite_token = p_token;
+
+  if v_jogador_id is null then
+    raise exception 'Convite inválido';
+  end if;
+
+  if exists (select 1 from jogadores where id = v_jogador_id and user_id is not null) then
+    raise exception 'Esse convite já foi usado';
+  end if;
+
+  select mg.grupo_id into v_grupo_id from membros_grupo mg where mg.jogador_id = v_jogador_id limit 1;
+
+  if exists (
+    select 1
+    from membros_grupo mg
+    join jogadores j on j.id = mg.jogador_id
+    where mg.grupo_id = v_grupo_id and j.user_id = auth.uid()
+  ) then
+    raise exception 'Você já é membro desse grupo com outra conta/jogador';
+  end if;
+
+  update jogadores set user_id = auth.uid(), convite_token = null where id = v_jogador_id;
+
+  return v_grupo_id;
+end;
+$$;
+
+grant execute on function public.associar_conta_jogador(uuid) to authenticated;
+
+-- ============================================================
 -- RPC: avaliar jogadores de um racha (nota 1-5, exceto a si mesmo)
 -- ============================================================
 -- Toda a validação (confirmou presença, avaliado também confirmou, não é a

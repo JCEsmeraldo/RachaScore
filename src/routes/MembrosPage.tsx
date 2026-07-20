@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
+import { compartilhar } from '../lib/compartilhar'
 import type { Grupo, MediaAvaliacao, MembroComJogador } from '../lib/types'
 
 export function MembrosPage() {
@@ -17,6 +18,8 @@ export function MembrosPage() {
   const [emailNovoMembro, setEmailNovoMembro] = useState('')
   const [salvando, setSalvando] = useState(false)
   const [linkCopiado, setLinkCopiado] = useState(false)
+  const [gerandoConvitePessoal, setGerandoConvitePessoal] = useState<string | null>(null)
+  const [convitePessoalCopiado, setConvitePessoalCopiado] = useState<string | null>(null)
 
   const souDono = !!grupo && !!session && grupo.dono_id === session.user.id
   const propriaMembresia = membros.find((m) => m.jogadores?.user_id === session?.user.id)
@@ -138,6 +141,40 @@ export function MembrosPage() {
     carregar()
   }
 
+  async function handleGerarConvitePessoal(jogadorId: string, nomeJogador: string) {
+    setErro(null)
+    setGerandoConvitePessoal(jogadorId)
+
+    const { data, error } = await supabase.rpc('gerar_convite_jogador', { p_jogador_id: jogadorId })
+
+    setGerandoConvitePessoal(null)
+
+    if (error) {
+      setErro(error.message)
+      return
+    }
+
+    const url = `${window.location.origin}${import.meta.env.BASE_URL}assumir/${data}`
+    const texto = [
+      `🔗 Convite pro RachaScore`,
+      ``,
+      `${nomeJogador}, você já tem histórico e estatísticas registrados no grupo "${grupo?.nome ?? ''}" como convidado.`,
+      `Entra com sua conta (ou cria uma) nesse link pra assumir esse perfil e não perder nada:`,
+      url,
+    ].join('\n')
+    const resultado = await compartilhar(texto)
+
+    if (resultado.erro) {
+      setErro(resultado.erro)
+      return
+    }
+
+    if (resultado.copiado) {
+      setConvitePessoalCopiado(jogadorId)
+      setTimeout(() => setConvitePessoalCopiado(null), 2000)
+    }
+  }
+
   function handleCopiarLink() {
     if (!grupo) return
     const url = `${window.location.origin}${import.meta.env.BASE_URL}convite/${grupo.convite_token}`
@@ -239,7 +276,21 @@ export function MembrosPage() {
                     ))}
                 </Link>
                 {souOrganizador && membro.jogadores?.user_id !== grupo?.dono_id && (
-                  <div className="flex gap-3">
+                  <div className="flex items-center gap-3">
+                    {!membro.jogadores?.user_id && (
+                      <button
+                        onClick={() => handleGerarConvitePessoal(membro.jogador_id, membro.jogadores?.nome ?? 'Jogador')}
+                        disabled={gerandoConvitePessoal === membro.jogador_id}
+                        title="Gera um link pra essa pessoa logar e assumir esse jogador, mantendo o histórico"
+                        className="text-sm text-emerald-400 hover:text-emerald-300 disabled:opacity-50"
+                      >
+                        {convitePessoalCopiado === membro.jogador_id
+                          ? 'Copiado!'
+                          : gerandoConvitePessoal === membro.jogador_id
+                            ? 'Gerando...'
+                            : '🔗 Convite'}
+                      </button>
+                    )}
                     <button
                       onClick={() => handleAlternarAdmin(membro.jogador_id, !membro.is_admin)}
                       className="text-sm text-neutral-400 hover:text-neutral-200"

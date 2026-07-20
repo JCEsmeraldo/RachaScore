@@ -17,6 +17,8 @@ import { AvaliarPage } from './routes/AvaliarPage'
 import { EstatisticasRachaPage } from './routes/EstatisticasRachaPage'
 import { EstatisticasGrupoPage } from './routes/EstatisticasGrupoPage'
 import { JogadorDetailPage } from './routes/JogadorDetailPage'
+import { InstalarPage } from './routes/InstalarPage'
+import { AssumirPerfilPage } from './routes/AssumirPerfilPage'
 import { ProtectedRoute } from './routes/ProtectedRoute'
 
 function App() {
@@ -24,6 +26,8 @@ function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/convite/:token" element={<ConvitePage />} />
+      <Route path="/assumir/:token" element={<AssumirPerfilPage />} />
+      <Route path="/instalar" element={<InstalarPage />} />
       <Route element={<ProtectedRoute />}>
         <Route path="/" element={<GruposPage />} />
         <Route path="/grupos/:grupoId" element={<GrupoDetailPage />} />

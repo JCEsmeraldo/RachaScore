@@ -56,12 +56,14 @@ export function GruposPage() {
       <div className="mx-auto max-w-md space-y-6">
         <header className="flex items-center justify-between">
           <h1 className="text-xl font-semibold">Meus grupos</h1>
-          <button
-            onClick={signOut}
-            className="text-sm text-neutral-400 hover:text-neutral-200"
-          >
-            Sair
-          </button>
+          <div className="flex items-center gap-3 text-sm">
+            <Link to="/instalar" className="text-neutral-400 hover:text-neutral-200">
+              📲 Instalar
+            </Link>
+            <button onClick={signOut} className="text-neutral-400 hover:text-neutral-200">
+              Sair
+            </button>
+          </div>
         </header>
 
         <form onSubmit={handleCriarGrupo} className="flex gap-2">

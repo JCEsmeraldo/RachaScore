@@ -76,6 +76,9 @@ export function PartidaDetailPage() {
   const [cartoes, setCartoes] = useState<Cartao[]>([])
   const [eventos, setEventos] = useState<EventoSumula[]>([])
   const [salvando, setSalvando] = useState(false)
+  // só visual — quem tá assistindo de fora da quadra às vezes vê o time da
+  // esquerda na tela jogando do lado direito de verdade; inverter não mexe em nada no banco
+  const [invertido, setInvertido] = useState(false)
   const primeiraCarga = useRef(true)
   // useState sozinho não trava a tempo: cliques em rajada (duplo clique, toque
   // fantasma) rodam todos no mesmo tick, antes do react re-renderizar com
@@ -489,23 +492,124 @@ export function PartidaDetailPage() {
   const umSetSo = ehVolei && (racha.config as ConfigVolei).num_sets === 1
   const cronometroSegundos = segundosAoVivo(partida, agora)
 
+  const ladoA = { id: partida.time_a_id, time: timeA, placar: placarA, jogadores: jogadoresA }
+  const ladoB = { id: partida.time_b_id, time: timeB, placar: placarB, jogadores: jogadoresB }
+  const [ladoEsq, ladoDir] = invertido ? [ladoB, ladoA] : [ladoA, ladoB]
+
+  function ColunaTime({ timeId, nome, jogadores }: { timeId: string; nome: string; jogadores: JogadorTime[] }) {
+    return (
+      <div className="space-y-2">
+        <h3 className="text-sm font-medium text-neutral-400">{nome}</h3>
+        {jogadores.map((j) => {
+          const cartoesJ = cartoesDoJogador(j.jogador_id)
+          return (
+            <div key={j.jogador_id}>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => handleClicarJogador(j.jogador_id)}
+                  className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 px-2 py-2 text-sm hover:border-emerald-500"
+                >
+                  +1 {j.nome}
+                  {cartoesJ.amarelo > 0 && ` 🟨${cartoesJ.amarelo > 1 ? cartoesJ.amarelo : ''}`}
+                  {cartoesJ.vermelho > 0 && ' 🟥'}
+                </button>
+                {!ehVolei && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => handleCartao(j.jogador_id, 'amarelo')}
+                      title="Cartão amarelo"
+                      className="rounded-lg border border-neutral-800 px-2 text-sm hover:border-amber-400"
+                    >
+                      🟨
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleCartao(j.jogador_id, 'vermelho')}
+                      title="Cartão vermelho"
+                      className="rounded-lg border border-neutral-800 px-2 text-sm hover:border-red-400"
+                    >
+                      🟥
+                    </button>
+                  </>
+                )}
+              </div>
+              {expandido === j.jogador_id && (
+                <div className="mt-1 flex flex-wrap gap-1 rounded-lg border border-emerald-500/40 bg-emerald-500/5 p-2">
+                  {ehVolei
+                    ? MOTIVOS.map((m) => (
+                        <button
+                          key={m.valor}
+                          type="button"
+                          onClick={() => handleEscolherMotivo(timeId, j.jogador_id, m.valor)}
+                          className="rounded-full bg-neutral-800 px-2 py-1 text-xs text-neutral-200 hover:bg-emerald-500/20 hover:text-emerald-400"
+                        >
+                          {m.label}
+                        </button>
+                      ))
+                    : (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => handleEscolherAssistencia(timeId, j.jogador_id, null)}
+                            className="rounded-full bg-neutral-800 px-2 py-1 text-xs text-neutral-400 hover:bg-emerald-500/20 hover:text-emerald-400"
+                          >
+                            Sem assistência
+                          </button>
+                          {jogadores
+                            .filter((t) => t.jogador_id !== j.jogador_id)
+                            .map((t) => (
+                              <button
+                                key={t.jogador_id}
+                                type="button"
+                                onClick={() => handleEscolherAssistencia(timeId, j.jogador_id, t.jogador_id)}
+                                className="rounded-full bg-neutral-800 px-2 py-1 text-xs text-neutral-200 hover:bg-emerald-500/20 hover:text-emerald-400"
+                              >
+                                {t.nome}
+                              </button>
+                            ))}
+                        </>
+                      )}
+                </div>
+              )}
+            </div>
+          )
+        })}
+        <button
+          onClick={() => handlePonto(timeId, null, null)}
+          className="w-full rounded-lg border border-neutral-800 px-2 py-2 text-xs text-neutral-500 hover:border-neutral-600"
+        >
+          +1 sem autor
+        </button>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-svh bg-neutral-950 px-4 py-6 text-white">
       <div className="mx-auto max-w-md space-y-6">
-        <header>
+        <header className="flex items-center justify-between">
           <Link
             to={`/grupos/${grupoId}/rachas/${rachaId}`}
             className="text-sm text-neutral-400 hover:text-neutral-200"
           >
             ← Voltar pro racha
           </Link>
+          <button
+            type="button"
+            onClick={() => setInvertido((v) => !v)}
+            title="Inverter lado dos times na tela"
+            className="text-sm text-neutral-400 hover:text-neutral-200"
+          >
+            ⇄ Inverter lados
+          </button>
         </header>
 
         <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-6 text-center">
           {finalizada && <p className="mb-2 text-sm font-medium text-emerald-400">Partida finalizada</p>}
           {ehVolei && !umSetSo && (
             <p className="mb-1 text-sm text-neutral-400">
-              Sets: {partida.placar_a} - {partida.placar_b}
+              Sets: {invertido ? partida.placar_b : partida.placar_a} - {invertido ? partida.placar_a : partida.placar_b}
               {setAtual && ` · Set ${setAtual.numero}`}
             </p>
           )}
@@ -545,13 +649,13 @@ export function PartidaDetailPage() {
           })()}
           <div className="flex items-center justify-center gap-6">
             <div className="flex-1">
-              <p className="truncate text-sm text-neutral-400">{timeA.nome}</p>
-              <p className="text-4xl font-bold">{placarA}</p>
+              <p className="truncate text-sm text-neutral-400">{ladoEsq.time?.nome}</p>
+              <p className="text-4xl font-bold">{ladoEsq.placar}</p>
             </div>
             <span className="text-2xl text-neutral-600">x</span>
             <div className="flex-1">
-              <p className="truncate text-sm text-neutral-400">{timeB.nome}</p>
-              <p className="text-4xl font-bold">{placarB}</p>
+              <p className="truncate text-sm text-neutral-400">{ladoDir.time?.nome}</p>
+              <p className="text-4xl font-bold">{ladoDir.placar}</p>
             </div>
           </div>
         </div>
@@ -571,175 +675,9 @@ export function PartidaDetailPage() {
         {souOrganizador && !finalizada && (
           <>
             <fieldset disabled={salvando} className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <h3 className="text-sm font-medium text-neutral-400">{timeA.nome}</h3>
-                {jogadoresA.map((j) => {
-                  const cartoesJ = cartoesDoJogador(j.jogador_id)
-                  return (
-                    <div key={j.jogador_id}>
-                      <div className="flex gap-1">
-                        <button
-                          onClick={() => handleClicarJogador(j.jogador_id)}
-                          className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 px-2 py-2 text-sm hover:border-emerald-500"
-                        >
-                          +1 {j.nome}
-                          {cartoesJ.amarelo > 0 && ` 🟨${cartoesJ.amarelo > 1 ? cartoesJ.amarelo : ''}`}
-                          {cartoesJ.vermelho > 0 && ' 🟥'}
-                        </button>
-                        {!ehVolei && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => handleCartao(j.jogador_id, 'amarelo')}
-                              title="Cartão amarelo"
-                              className="rounded-lg border border-neutral-800 px-2 text-sm hover:border-amber-400"
-                            >
-                              🟨
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleCartao(j.jogador_id, 'vermelho')}
-                              title="Cartão vermelho"
-                              className="rounded-lg border border-neutral-800 px-2 text-sm hover:border-red-400"
-                            >
-                              🟥
-                            </button>
-                          </>
-                        )}
-                      </div>
-                      {expandido === j.jogador_id && (
-                        <div className="mt-1 flex flex-wrap gap-1 rounded-lg border border-emerald-500/40 bg-emerald-500/5 p-2">
-                          {ehVolei
-                            ? MOTIVOS.map((m) => (
-                                <button
-                                  key={m.valor}
-                                  type="button"
-                                  onClick={() => handleEscolherMotivo(partida.time_a_id, j.jogador_id, m.valor)}
-                                  className="rounded-full bg-neutral-800 px-2 py-1 text-xs text-neutral-200 hover:bg-emerald-500/20 hover:text-emerald-400"
-                                >
-                                  {m.label}
-                                </button>
-                              ))
-                            : (
-                                <>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleEscolherAssistencia(partida.time_a_id, j.jogador_id, null)}
-                                    className="rounded-full bg-neutral-800 px-2 py-1 text-xs text-neutral-400 hover:bg-emerald-500/20 hover:text-emerald-400"
-                                  >
-                                    Sem assistência
-                                  </button>
-                                  {jogadoresA
-                                    .filter((t) => t.jogador_id !== j.jogador_id)
-                                    .map((t) => (
-                                      <button
-                                        key={t.jogador_id}
-                                        type="button"
-                                        onClick={() => handleEscolherAssistencia(partida.time_a_id, j.jogador_id, t.jogador_id)}
-                                        className="rounded-full bg-neutral-800 px-2 py-1 text-xs text-neutral-200 hover:bg-emerald-500/20 hover:text-emerald-400"
-                                      >
-                                        {t.nome}
-                                      </button>
-                                    ))}
-                                </>
-                              )}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-                <button
-                  onClick={() => handlePonto(partida.time_a_id, null, null)}
-                  className="w-full rounded-lg border border-neutral-800 px-2 py-2 text-xs text-neutral-500 hover:border-neutral-600"
-                >
-                  +1 sem autor
-                </button>
-              </div>
-
-              <div className="space-y-2">
-                <h3 className="text-sm font-medium text-neutral-400">{timeB.nome}</h3>
-                {jogadoresB.map((j) => {
-                  const cartoesJ = cartoesDoJogador(j.jogador_id)
-                  return (
-                    <div key={j.jogador_id}>
-                      <div className="flex gap-1">
-                        <button
-                          onClick={() => handleClicarJogador(j.jogador_id)}
-                          className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 px-2 py-2 text-sm hover:border-emerald-500"
-                        >
-                          +1 {j.nome}
-                          {cartoesJ.amarelo > 0 && ` 🟨${cartoesJ.amarelo > 1 ? cartoesJ.amarelo : ''}`}
-                          {cartoesJ.vermelho > 0 && ' 🟥'}
-                        </button>
-                        {!ehVolei && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => handleCartao(j.jogador_id, 'amarelo')}
-                              title="Cartão amarelo"
-                              className="rounded-lg border border-neutral-800 px-2 text-sm hover:border-amber-400"
-                            >
-                              🟨
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleCartao(j.jogador_id, 'vermelho')}
-                              title="Cartão vermelho"
-                              className="rounded-lg border border-neutral-800 px-2 text-sm hover:border-red-400"
-                            >
-                              🟥
-                            </button>
-                          </>
-                        )}
-                      </div>
-                      {expandido === j.jogador_id && (
-                        <div className="mt-1 flex flex-wrap gap-1 rounded-lg border border-emerald-500/40 bg-emerald-500/5 p-2">
-                          {ehVolei
-                            ? MOTIVOS.map((m) => (
-                                <button
-                                  key={m.valor}
-                                  type="button"
-                                  onClick={() => handleEscolherMotivo(partida.time_b_id, j.jogador_id, m.valor)}
-                                  className="rounded-full bg-neutral-800 px-2 py-1 text-xs text-neutral-200 hover:bg-emerald-500/20 hover:text-emerald-400"
-                                >
-                                  {m.label}
-                                </button>
-                              ))
-                            : (
-                                <>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleEscolherAssistencia(partida.time_b_id, j.jogador_id, null)}
-                                    className="rounded-full bg-neutral-800 px-2 py-1 text-xs text-neutral-400 hover:bg-emerald-500/20 hover:text-emerald-400"
-                                  >
-                                    Sem assistência
-                                  </button>
-                                  {jogadoresB
-                                    .filter((t) => t.jogador_id !== j.jogador_id)
-                                    .map((t) => (
-                                      <button
-                                        key={t.jogador_id}
-                                        type="button"
-                                        onClick={() => handleEscolherAssistencia(partida.time_b_id, j.jogador_id, t.jogador_id)}
-                                        className="rounded-full bg-neutral-800 px-2 py-1 text-xs text-neutral-200 hover:bg-emerald-500/20 hover:text-emerald-400"
-                                      >
-                                        {t.nome}
-                                      </button>
-                                    ))}
-                                </>
-                              )}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-                <button
-                  onClick={() => handlePonto(partida.time_b_id, null, null)}
-                  className="w-full rounded-lg border border-neutral-800 px-2 py-2 text-xs text-neutral-500 hover:border-neutral-600"
-                >
-                  +1 sem autor
-                </button>
-              </div>
+              {[ladoEsq, ladoDir].map((lado) => (
+                <ColunaTime key={lado.id} timeId={lado.id} nome={lado.time?.nome ?? '?'} jogadores={lado.jogadores} />
+              ))}
             </fieldset>
 
             {ehVolei ? (
@@ -767,7 +705,7 @@ export function PartidaDetailPage() {
             <h3 className="text-sm font-medium text-neutral-400">Sets anteriores</h3>
             {setsAnteriores.map((s) => (
               <p key={s.id} className="text-sm text-neutral-500">
-                Set {s.numero}: {s.placar_a} - {s.placar_b}
+                Set {s.numero}: {invertido ? s.placar_b : s.placar_a} - {invertido ? s.placar_a : s.placar_b}
               </p>
             ))}
           </div>
@@ -782,10 +720,7 @@ export function PartidaDetailPage() {
             ) : (
               <>
                 <div className="grid grid-cols-2 gap-3">
-                  {[
-                    { time: timeA, id: partida.time_a_id },
-                    { time: timeB, id: partida.time_b_id },
-                  ].map(({ time, id }) => (
+                  {[ladoEsq, ladoDir].map(({ time, id }) => (
                     <div key={id} className="space-y-1 rounded-lg border border-neutral-800 bg-neutral-900 p-3">
                       <h4 className="text-xs font-medium text-neutral-500">{time?.nome}</h4>
                       {eventos.filter((e) => e.time_id === id).length === 0 ? (

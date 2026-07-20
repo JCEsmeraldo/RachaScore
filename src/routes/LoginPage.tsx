@@ -4,13 +4,16 @@ import { useAuth } from '../lib/AuthContext'
 import { CHAVE_CONVITE_PENDENTE } from './ConvitePage'
 
 function destinoAposLogin() {
-  const token = localStorage.getItem(CHAVE_CONVITE_PENDENTE)
-  return token ? `/convite/${token}` : '/'
+  const valor = localStorage.getItem(CHAVE_CONVITE_PENDENTE)
+  if (!valor) return '/'
+  if (valor.startsWith('assumir:')) return `/assumir/${valor.slice('assumir:'.length)}`
+  return `/convite/${valor}`
 }
 
 export function LoginPage() {
   const [mode, setMode] = useState<'login' | 'signup'>('login')
   const [nome, setNome] = useState('')
+  const [sobrenome, setSobrenome] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -28,12 +31,18 @@ export function LoginPage() {
     e.preventDefault()
     setError(null)
     setInfo(null)
+
+    if (mode === 'signup' && (!nome.trim() || !sobrenome.trim())) {
+      setError('Preenche nome e sobrenome')
+      return
+    }
+
     setSubmitting(true)
 
     const result =
       mode === 'login'
         ? await signInWithPassword(email, password)
-        : await signUp(email, password, nome)
+        : await signUp(email, password, `${nome.trim()} ${sobrenome.trim()}`)
 
     setSubmitting(false)
 
@@ -62,14 +71,24 @@ export function LoginPage() {
         </h1>
 
         {mode === 'signup' && (
-          <input
-            type="text"
-            placeholder="Nome"
-            value={nome}
-            onChange={(e) => setNome(e.target.value)}
-            required
-            className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-white placeholder-neutral-500 outline-none focus:border-emerald-500"
-          />
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="Nome"
+              value={nome}
+              onChange={(e) => setNome(e.target.value)}
+              required
+              className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-white placeholder-neutral-500 outline-none focus:border-emerald-500"
+            />
+            <input
+              type="text"
+              placeholder="Sobrenome"
+              value={sobrenome}
+              onChange={(e) => setSobrenome(e.target.value)}
+              required
+              className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-white placeholder-neutral-500 outline-none focus:border-emerald-500"
+            />
+          </div>
         )}
 
         <input

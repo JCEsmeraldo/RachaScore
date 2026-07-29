@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { supabase } from '../lib/supabaseClient'
+import { supabase, buscarTudo } from '../lib/supabaseClient'
 import { contarJogosEVitorias, montarTabelaMotivos, type LinhaMotivo } from '../lib/estatisticas'
 import { TabelaMotivos } from '../components/TabelaMotivos'
 
@@ -101,16 +101,25 @@ export function EstatisticasGrupoPage() {
       let motivosVolei: LinhaMotivo[] = []
 
       if (partidaIds.length > 0) {
+        // filtra por racha_id (lista curta) via join em vez de partida_id (lista
+        // que cresce sem parar — torneio gera 20+ partidas por racha). Além disso
+        // busca em paginas: grupo com bastante historico passa do max-rows padrao
+        // do PostgREST (1000), que corta o final do resultado em silencio —
+        // exatamente os rachas mais recentes, que vem por ultimo na resposta
         const [{ data: eventosData, error: erroEventos }, { data: escalacoesData }, { data: presencasData }] =
           await Promise.all([
-            supabase
-              .from('eventos_ponto')
-              .select('partida_id, jogador_id, motivo, jogadores!eventos_ponto_jogador_id_fkey(nome)')
-              .in('partida_id', partidaIds),
-            supabase
-              .from('escalacoes_partida')
-              .select('partida_id, jogador_id, time_id')
-              .in('partida_id', partidaIds),
+            buscarTudo<unknown>(() =>
+              supabase
+                .from('eventos_ponto')
+                .select('partida_id, jogador_id, motivo, jogadores!eventos_ponto_jogador_id_fkey(nome), partidas!inner(racha_id)')
+                .in('partidas.racha_id', rachaIds),
+            ),
+            buscarTudo<unknown>(() =>
+              supabase
+                .from('escalacoes_partida')
+                .select('partida_id, jogador_id, time_id, partidas!inner(racha_id)')
+                .in('partidas.racha_id', rachaIds),
+            ),
             supabase
               .from('presencas_racha')
               .select('racha_id, jogador_id, time_id, jogadores(nome)')
@@ -148,9 +157,15 @@ export function EstatisticasGrupoPage() {
             jogadores: { nome: string } | null
           }[]).filter((p) => rachasVolei.has(p.racha_id))
 
+          const escalacoes = (escalacoesData ?? []) as unknown as {
+            partida_id: string
+            jogador_id: string
+            time_id: string
+          }[]
+
           const statsPorJogadorId = contarJogosEVitorias(
             partidasVolei,
-            (escalacoesData ?? []).filter((e) => partidasVolei.some((p) => p.id === e.partida_id)),
+            escalacoes.filter((e) => partidasVolei.some((p) => p.id === e.partida_id)),
             presencas,
           )
 

@@ -13,6 +13,9 @@ export function PartidasPage() {
   const [sets, setSets] = useState<SetPartida[]>([])
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
+  // confirmação em 2 cliques em vez de window.confirm() — nativo não é
+  // confiável em PWA instalado (iOS as vezes nem mostra o diálogo)
+  const [confirmandoId, setConfirmandoId] = useState<string | null>(null)
 
   async function carregar() {
     if (!rachaId) return
@@ -57,6 +60,25 @@ export function PartidasPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rachaId])
 
+  async function handleApagarPartida(partidaId: string) {
+    if (confirmandoId !== partidaId) {
+      setConfirmandoId(partidaId)
+      return
+    }
+
+    setConfirmandoId(null)
+    setErro(null)
+
+    const { error } = await supabase.from('partidas').delete().eq('id', partidaId)
+
+    if (error) {
+      setErro(error.message)
+      return
+    }
+
+    carregar()
+  }
+
   return (
     <div className="min-h-svh bg-neutral-950 px-4 py-6 text-white">
       <div className="mx-auto max-w-md space-y-6">
@@ -94,22 +116,40 @@ export function PartidasPage() {
               const setUnico = sets.find((s) => s.partida_id === partida.id)
               const placarA = setUnico ? setUnico.placar_a : partida.placar_a
               const placarB = setUnico ? setUnico.placar_b : partida.placar_b
+              const podeApagar = souOrganizador && partida.status !== 'finalizada'
+
               return (
-                <li key={partida.id}>
-                  <Link
-                    to={`/grupos/${grupoId}/rachas/${rachaId}/partidas/${partida.id}`}
-                    className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3 hover:border-neutral-700"
-                  >
-                    <span>
-                      {timeA?.nome ?? '?'} x {timeB?.nome ?? '?'}
-                    </span>
-                    <span className="text-neutral-400">
-                      {placarA} - {placarB}
-                      {partida.status === 'em_andamento' && (
-                        <span className="ml-2 text-xs text-emerald-400">ao vivo</span>
-                      )}
-                    </span>
-                  </Link>
+                <li key={partida.id} className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <Link
+                      to={`/grupos/${grupoId}/rachas/${rachaId}/partidas/${partida.id}`}
+                      className="flex flex-1 items-center justify-between rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3 hover:border-neutral-700"
+                    >
+                      <span>
+                        {timeA?.nome ?? '?'} x {timeB?.nome ?? '?'}
+                      </span>
+                      <span className="text-neutral-400">
+                        {placarA} - {placarB}
+                        {partida.status === 'em_andamento' && (
+                          <span className="ml-2 text-xs text-emerald-400">ao vivo</span>
+                        )}
+                      </span>
+                    </Link>
+                    {podeApagar && (
+                      <button
+                        type="button"
+                        onClick={() => handleApagarPartida(partida.id)}
+                        title="Apagar partida"
+                        className={
+                          confirmandoId === partida.id
+                            ? 'shrink-0 rounded-lg border border-red-500 bg-red-950/60 px-3 py-3 text-xs text-red-300'
+                            : 'shrink-0 rounded-lg border border-neutral-800 px-3 py-3 text-neutral-500 hover:border-red-900 hover:text-red-400'
+                        }
+                      >
+                        {confirmandoId === partida.id ? 'Confirmar?' : '🗑'}
+                      </button>
+                    )}
+                  </div>
                 </li>
               )
             })}

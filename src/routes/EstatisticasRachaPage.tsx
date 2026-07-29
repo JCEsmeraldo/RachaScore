@@ -4,6 +4,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { supabase } from '../lib/supabaseClient'
 import { contarJogosEVitorias, montarTabelaMotivos, type LinhaMotivo } from '../lib/estatisticas'
 import { TabelaMotivos } from '../components/TabelaMotivos'
+import { gerarImagemClassificacao, gerarImagemCombinada, compartilharImagem } from '../lib/exportarImagem'
 import type { ClassificacaoTime, Racha } from '../lib/types'
 
 type EventoComPartida = { partida_id: string; jogador_id: string | null; jogadores: { nome: string } | null }
@@ -20,6 +21,10 @@ export function EstatisticasRachaPage() {
   const [jogadorAberto, setJogadorAberto] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
+  const [exportandoClass, setExportandoClass] = useState(false)
+  const [classBaixado, setClassBaixado] = useState(false)
+  const [exportandoTudo, setExportandoTudo] = useState(false)
+  const [tudoBaixado, setTudoBaixado] = useState(false)
 
   useEffect(() => {
     async function carregar() {
@@ -145,6 +150,44 @@ export function EstatisticasRachaPage() {
 
   const labelPontuador = racha?.modalidade === 'volei' ? 'Maiores pontuadores' : 'Artilheiros'
 
+  // mesmo critério do MVP calculado dentro de TabelaMotivos: maior Total entre
+  // jogadores de verdade, independente da ordenação da tela
+  const mvpNome = [...motivos].filter((l) => l.nome !== 'Sem autor').sort((a, b) => b.total - a.total)[0]?.nome
+
+  async function handleExportarClassificacao() {
+    setExportandoClass(true)
+    try {
+      const blob = await gerarImagemClassificacao(classificacao)
+      const resultado = await compartilharImagem(blob, 'classificacao.png')
+      if (resultado.baixado) {
+        setClassBaixado(true)
+        setTimeout(() => setClassBaixado(false), 2000)
+      }
+    } finally {
+      setExportandoClass(false)
+    }
+  }
+
+  async function handleExportarTudo() {
+    setExportandoTudo(true)
+    try {
+      // "Sem autor" não é jogador de verdade — fica sempre por último, mesma
+      // regra do TabelaMotivos (que aqui não se aplica automático porque
+      // estamos usando o array cru, não o componente)
+      const motivosOrdenados = [...motivos].sort(
+        (a, b) => Number(a.nome === 'Sem autor') - Number(b.nome === 'Sem autor'),
+      )
+      const blob = await gerarImagemCombinada(classificacao, motivosOrdenados, mvpNome)
+      const resultado = await compartilharImagem(blob, 'estatisticas-completas.png')
+      if (resultado.baixado) {
+        setTudoBaixado(true)
+        setTimeout(() => setTudoBaixado(false), 2000)
+      }
+    } finally {
+      setExportandoTudo(false)
+    }
+  }
+
   const evolucaoPorPartida = useMemo(() => {
     if (!jogadorAberto) return []
     const porPartida = new Map<string, number>()
@@ -178,7 +221,31 @@ export function EstatisticasRachaPage() {
           <>
             {racha?.modo === 'torneio' && (
               <div className="space-y-2">
-                <h2 className="text-sm font-medium text-neutral-400">Classificação</h2>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-sm font-medium text-neutral-400">Classificação</h2>
+                  {classificacao.length > 0 && (
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={handleExportarClassificacao}
+                        disabled={exportandoClass}
+                        className="rounded-lg border border-neutral-700 px-3 py-1 text-xs text-neutral-300 hover:border-neutral-600 disabled:opacity-50"
+                      >
+                        {exportandoClass ? 'Gerando...' : classBaixado ? 'Baixado!' : 'Exportar classificação'}
+                      </button>
+                      {racha.modalidade === 'volei' && motivos.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleExportarTudo}
+                          disabled={exportandoTudo}
+                          className="rounded-lg border border-neutral-700 px-3 py-1 text-xs text-neutral-300 hover:border-neutral-600 disabled:opacity-50"
+                        >
+                          {exportandoTudo ? 'Gerando...' : tudoBaixado ? 'Baixado!' : 'Exportar tudo'}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
                 {classificacao.length === 0 ? (
                   <p className="text-sm text-neutral-500">Nenhuma partida finalizada ainda.</p>
                 ) : (

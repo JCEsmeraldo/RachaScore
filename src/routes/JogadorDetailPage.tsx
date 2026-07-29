@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { supabase } from '../lib/supabaseClient'
+import { supabase, buscarTudo } from '../lib/supabaseClient'
 import { montarTabelaMotivos, type LinhaMotivo } from '../lib/estatisticas'
 import { TabelaMotivos } from '../components/TabelaMotivos'
-import type { MediaAvaliacao } from '../lib/types'
+import type { MediaAvaliacao, Partida } from '../lib/types'
 
 type PontoEvolucao = { data: string; pontos: number }
 
@@ -76,7 +76,10 @@ export function JogadorDetailPage() {
           .select('racha_id, time_id')
           .eq('jogador_id', jogadorId)
           .in('racha_id', rachaIds),
-        supabase.from('partidas').select('*').in('racha_id', rachaIds),
+        // grupo com bastante historico passa do max-rows padrao do PostgREST
+        // (1000) — sem paginar, o final da lista (rachas mais recentes) some
+        // em silencio. Ver mesmo problema/fix em EstatisticasGrupoPage.
+        buscarTudo<Partida>(() => supabase.from('partidas').select('*').in('racha_id', rachaIds)),
       ])
 
       const timePorRacha = new Map((presencasData ?? []).map((p) => [p.racha_id, p.time_id]))
@@ -84,14 +87,16 @@ export function JogadorDetailPage() {
       const partidaIds = partidas.map((p) => p.id)
 
       // no torneio o time do jogador pode mudar a cada partida (escalação por partida);
-      // presencas_racha só guarda 1 time fixo pro racha inteiro, que só serve de fallback
+      // presencas_racha só guarda 1 time fixo pro racha inteiro, que só serve de fallback.
+      // Filtra por racha_id (lista curta) via join em vez de partida_id (lista que
+      // cresce com o grupo inteiro e estoura o tamanho da URL).
       const { data: escalacoesData } =
         partidaIds.length > 0
           ? await supabase
               .from('escalacoes_partida')
-              .select('partida_id, time_id')
+              .select('partida_id, time_id, partidas!inner(racha_id)')
               .eq('jogador_id', jogadorId)
-              .in('partida_id', partidaIds)
+              .in('partidas.racha_id', rachaIds)
           : { data: [] }
 
       const timePorPartida = new Map((escalacoesData ?? []).map((e) => [e.partida_id, e.time_id]))

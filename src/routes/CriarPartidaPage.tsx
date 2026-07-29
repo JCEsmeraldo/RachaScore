@@ -439,6 +439,12 @@ export function CriarPartidaPage() {
                   </option>
                 ))}
               </select>
+
+              {timeA && (
+                <div className="mt-2 rounded-lg border border-neutral-800 bg-neutral-900 p-3 text-sm text-neutral-400">
+                  {jogadoresDoTime(timeA).map((j) => j.nome).join(', ') || 'Nenhum jogador confirmado nesse time'}
+                </div>
+              )}
             </div>
 
             <div>
@@ -454,6 +460,12 @@ export function CriarPartidaPage() {
                   </option>
                 ))}
               </select>
+
+              {timeB && (
+                <div className="mt-2 rounded-lg border border-neutral-800 bg-neutral-900 p-3 text-sm text-neutral-400">
+                  {jogadoresDoTime(timeB).map((j) => j.nome).join(', ') || 'Nenhum jogador confirmado nesse time'}
+                </div>
+              )}
             </div>
 
             {erro && <p className="text-sm text-red-400">{erro}</p>}

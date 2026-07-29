@@ -15,6 +15,7 @@ export function TimesPage() {
   const [loading, setLoading] = useState(true)
   const [sorteando, setSorteando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
+  const [renomeando, setRenomeando] = useState<Record<string, string>>({})
 
   async function carregar() {
     if (!rachaId) return
@@ -84,6 +85,49 @@ export function TimesPage() {
     carregar()
   }
 
+  function valorNome(time: Time) {
+    return renomeando[time.id] ?? time.nome
+  }
+
+  function handleMudarNome(timeId: string, valor: string) {
+    setRenomeando((atual) => ({ ...atual, [timeId]: valor }))
+  }
+
+  async function handleSalvarNome(time: Time) {
+    const novoNome = valorNome(time).trim()
+
+    setRenomeando((atual) => {
+      const { [time.id]: _descarta, ...resto } = atual
+      return resto
+    })
+
+    if (!novoNome || novoNome === time.nome) return
+
+    const { error } = await supabase.from('times').update({ nome: novoNome }).eq('id', time.id)
+
+    if (error) {
+      setErro(error.message)
+      return
+    }
+
+    setTimes((atual) => atual.map((t) => (t.id === time.id ? { ...t, nome: novoNome } : t)))
+  }
+
+  function NomeTime({ time }: { time: Time }) {
+    if (!souOrganizador) return <h3 className="text-sm font-medium">{time.nome}</h3>
+
+    return (
+      <input
+        type="text"
+        value={valorNome(time)}
+        onChange={(e) => handleMudarNome(time.id, e.target.value)}
+        onBlur={() => handleSalvarNome(time)}
+        onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+        className="w-32 rounded border border-transparent bg-transparent px-1 text-sm font-medium outline-none hover:border-neutral-700 focus:border-emerald-500 focus:bg-neutral-800"
+      />
+    )
+  }
+
   async function handleApagarTime(timeId: string) {
     if (!rachaId) return
     if (!confirm('Apagar esse time?')) return
@@ -142,7 +186,9 @@ export function TimesPage() {
                 <h2 className="text-sm font-medium text-neutral-400">Sorteio</h2>
                 {timesSorteio.map((time) => (
                   <div key={time.id} className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
-                    <h3 className="mb-2 text-sm font-medium">{time.nome}</h3>
+                    <div className="mb-2">
+                      <NomeTime time={time} />
+                    </div>
                     <ul className="space-y-1">
                       {presencas
                         .filter((p) => p.time_id === time.id)
@@ -177,7 +223,7 @@ export function TimesPage() {
                 {timesPersonalizados.map((time) => (
                   <div key={time.id} className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
                     <div className="mb-2 flex items-center justify-between">
-                      <h3 className="text-sm font-medium">{time.nome}</h3>
+                      <NomeTime time={time} />
                       {souOrganizador && (
                         <button
                           onClick={() => handleApagarTime(time.id)}

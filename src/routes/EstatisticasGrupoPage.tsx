@@ -4,6 +4,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { supabase, buscarTudo } from '../lib/supabaseClient'
 import { contarJogosEVitorias, montarTabelaMotivos, type LinhaMotivo } from '../lib/estatisticas'
 import { TabelaMotivos } from '../components/TabelaMotivos'
+import { ResumoJogador } from '../components/ResumoJogador'
 
 type EventoParaMotivo = {
   partida_id: string
@@ -271,7 +272,12 @@ export function EstatisticasGrupoPage() {
             />
 
             {jogadorAberto && (
-              <div className="space-y-1 rounded-lg border border-neutral-800 bg-neutral-900 p-4">
+              <div className="space-y-3 rounded-lg border border-neutral-800 bg-neutral-900 p-4">
+                {(() => {
+                  const linha = stats.motivos.find((m) => m.nome === jogadorAberto)
+                  return linha ? <ResumoJogador linha={linha} /> : null
+                })()}
+
                 <p className="text-sm text-neutral-400">Pontos por racha — {jogadorAberto}</p>
                 {evolucaoPorRacha.length === 0 ? (
                   <p className="text-sm text-neutral-500">Nenhum ponto registrado.</p>

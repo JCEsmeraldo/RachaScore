@@ -4,6 +4,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { supabase } from '../lib/supabaseClient'
 import { contarJogosEVitorias, montarTabelaMotivos, type LinhaMotivo } from '../lib/estatisticas'
 import { TabelaMotivos } from '../components/TabelaMotivos'
+import { ResumoJogador } from '../components/ResumoJogador'
 import { gerarImagemClassificacao, gerarImagemCombinada, compartilharImagem } from '../lib/exportarImagem'
 import type { ClassificacaoTime, Racha } from '../lib/types'
 
@@ -310,7 +311,12 @@ export function EstatisticasRachaPage() {
                 />
 
                 {jogadorAberto && (
-                  <div className="space-y-1 rounded-lg border border-neutral-800 bg-neutral-900 p-4">
+                  <div className="space-y-3 rounded-lg border border-neutral-800 bg-neutral-900 p-4">
+                    {(() => {
+                      const linha = motivos.find((m) => m.nome === jogadorAberto)
+                      return linha ? <ResumoJogador linha={linha} /> : null
+                    })()}
+
                     <p className="text-sm text-neutral-400">Pontos por partida — {jogadorAberto}</p>
                     {evolucaoPorPartida.length === 0 ? (
                       <p className="text-sm text-neutral-500">Nenhum ponto registrado.</p>

@@ -91,7 +91,7 @@ export type SetPartida = {
   created_at: string
 }
 
-export type MotivoPonto = 'ataque' | 'bloqueio' | 'saque' | 'erro_adversario' | 'outro'
+export type MotivoPonto = 'pinga' | 'lob' | 'corte' | 'bloqueio' | 'saque' | 'erro_adversario' | 'outro'
 
 export type TipoCartao = 'amarelo' | 'vermelho'
 

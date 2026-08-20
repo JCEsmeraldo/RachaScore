@@ -1,14 +1,16 @@
 import type { MotivoPonto } from './types'
 
 export const LABEL_MOTIVO: Record<MotivoPonto, string> = {
-  ataque: 'Ataque',
+  pinga: 'Pinga',
+  lob: 'Lob',
+  corte: 'Corte',
   bloqueio: 'Bloqueio',
   saque: 'Saque',
-  erro_adversario: 'Erro adversário',
+  erro_adversario: 'Erro',
   outro: 'Outro',
 }
 
-export const COLUNAS_MOTIVO: MotivoPonto[] = ['ataque', 'bloqueio', 'saque', 'outro']
+export const COLUNAS_MOTIVO: MotivoPonto[] = ['pinga', 'lob', 'corte', 'bloqueio', 'saque', 'outro']
 
 export type LinhaMotivo = {
   nome: string
@@ -16,6 +18,7 @@ export type LinhaMotivo = {
   vitorias: number
   porMotivo: Partial<Record<MotivoPonto, number>>
   total: number
+  erros: number
 }
 
 type EventoParaMotivo = {
@@ -103,16 +106,25 @@ export function contarJogosEVitorias(
 export function montarTabelaMotivos(eventos: EventoParaMotivo[]): LinhaMotivo[] {
   const porMotivo = new Map<string, Partial<Record<MotivoPonto, number>>>()
   const totais = new Map<string, number>()
+  const errosPorNome = new Map<string, number>()
   const partidasPorNome = new Map<string, Set<string>>()
 
   for (const ev of eventos) {
     const nome = ev.jogador_id && ev.jogadores ? ev.jogadores.nome : 'Sem autor'
     const motivo = (ev.motivo ?? undefined) as MotivoPonto | undefined
 
-    totais.set(nome, (totais.get(nome) ?? 0) + 1)
-
     if (!partidasPorNome.has(nome)) partidasPorNome.set(nome, new Set())
     partidasPorNome.get(nome)!.add(ev.partida_id)
+
+    // erro é do jogador que ERROU (perdeu o ponto pro adversário), não uma
+    // pontuação dele — fica fora do Total e das colunas de motivo, em coluna
+    // própria (Erros), senão infla a estatística ofensiva de quem errou
+    if (motivo === 'erro_adversario') {
+      errosPorNome.set(nome, (errosPorNome.get(nome) ?? 0) + 1)
+      continue
+    }
+
+    totais.set(nome, (totais.get(nome) ?? 0) + 1)
 
     if (motivo) {
       if (!porMotivo.has(nome)) porMotivo.set(nome, {})
@@ -121,13 +133,16 @@ export function montarTabelaMotivos(eventos: EventoParaMotivo[]): LinhaMotivo[] 
     }
   }
 
-  return [...totais.entries()]
-    .map(([nome, total]) => ({
+  const nomes = new Set([...totais.keys(), ...errosPorNome.keys()])
+
+  return [...nomes]
+    .map((nome) => ({
       nome,
-      total,
+      total: totais.get(nome) ?? 0,
       jogos: partidasPorNome.get(nome)?.size ?? 0,
       vitorias: 0, // sobrescrito por quem chama, com contarJogosEVitorias
       porMotivo: porMotivo.get(nome) ?? {},
+      erros: errosPorNome.get(nome) ?? 0,
     }))
     .sort((a, b) => b.total - a.total)
 }

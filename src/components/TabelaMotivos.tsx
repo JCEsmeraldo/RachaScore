@@ -2,13 +2,14 @@ import { useState } from 'react'
 import { COLUNAS_MOTIVO, LABEL_MOTIVO, type LinhaMotivo } from '../lib/estatisticas'
 import { compartilharImagem, gerarImagemTabelaMotivos } from '../lib/exportarImagem'
 
-type Coluna = 'nome' | 'jogos' | 'vitorias' | 'total' | (typeof COLUNAS_MOTIVO)[number]
+type Coluna = 'nome' | 'jogos' | 'vitorias' | 'erros' | 'total' | (typeof COLUNAS_MOTIVO)[number]
 
 export function TabelaMotivos({
   linhas,
   mostrarJogador = true,
   mostrarJogos = true,
   mostrarVitorias = true,
+  mostrarErros = true,
   mostrarMvp = false,
   mostrarExportar = false,
   aoClicarJogador,
@@ -18,6 +19,7 @@ export function TabelaMotivos({
   mostrarJogador?: boolean
   mostrarJogos?: boolean
   mostrarVitorias?: boolean
+  mostrarErros?: boolean
   mostrarMvp?: boolean
   mostrarExportar?: boolean
   aoClicarJogador?: (nome: string) => void
@@ -36,6 +38,7 @@ export function TabelaMotivos({
     if (coluna === 'nome') return linha.nome
     if (coluna === 'jogos') return linha.jogos
     if (coluna === 'vitorias') return linha.vitorias
+    if (coluna === 'erros') return linha.erros
     if (coluna === 'total') return linha.total
     return linha.porMotivo[coluna] ?? 0
   }
@@ -119,6 +122,7 @@ export function TabelaMotivos({
               {COLUNAS_MOTIVO.map((m) => (
                 <Cabecalho key={m} coluna={m} label={LABEL_MOTIVO[m]} />
               ))}
+              {mostrarErros && <Cabecalho coluna="erros" label="Erros" />}
               <Cabecalho coluna="total" label="Total" />
             </tr>
           </thead>
@@ -157,6 +161,9 @@ export function TabelaMotivos({
                     {linha.porMotivo[m] ?? 0}
                   </td>
                 ))}
+                {mostrarErros && (
+                  <td className="px-2 py-2 text-center">{linha.nome === 'Sem autor' ? '-' : linha.erros}</td>
+                )}
                 <td className="px-2 py-2 text-center font-medium">{linha.total}</td>
               </tr>
             ))}

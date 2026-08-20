@@ -18,11 +18,11 @@ export function ResumoJogador({ linha }: { linha: LinhaMotivo }) {
           <p className="text-neutral-500">Aproveitamento</p>
           <p className="text-lg font-medium">{aproveitamento === null ? '-' : `${aproveitamento}%`}</p>
         </div>
-        {linha.total > 0 && (
+        {(linha.total > 0 || linha.erros > 0) && (
           <div className="col-span-2 flex flex-wrap justify-center gap-x-3 gap-y-1 text-xs text-neutral-400">
             {COLUNAS_MOTIVO.map((m) => {
               const qtd = linha.porMotivo[m] ?? 0
-              if (qtd === 0) return null
+              if (qtd === 0 || linha.total === 0) return null
               const pct = Math.round((qtd / linha.total) * 100)
               return (
                 <span key={m}>
@@ -30,6 +30,7 @@ export function ResumoJogador({ linha }: { linha: LinhaMotivo }) {
                 </span>
               )
             })}
+            {linha.erros > 0 && <span className="text-red-400">Erros {linha.erros}</span>}
           </div>
         )}
       </div>

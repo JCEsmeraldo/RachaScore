@@ -56,7 +56,7 @@ Times (`times`) pertencem a um racha e nunca são fixos entre rachas diferentes.
 - O placar é registrado de forma granular: cada ponto/gol é um evento próprio (`eventos_ponto`), não apenas um número final.
 - **Autoria do ponto/gol é opcional**:
   - Futebol: o gol normalmente tem um autor. Em caso de gol contra, o evento pode ficar sem autor. Marcar o gol pode opcionalmente registrar uma **assistência** (um companheiro de time, ou "sem assistência").
-  - Vôlei: pontos podem não ter autor (ex.: erro de saque do adversário). Cada evento pode registrar um **motivo**: `ataque`, `bloqueio`, `saque`, `erro_adversario` ou `outro`.
+  - Vôlei: pontos podem não ter autor ("Sem autor" — quando não dá pra saber ou não quer parar o jogo pra apontar). Cada evento pode registrar um **motivo**: `pinga`, `lob`, `corte`, `bloqueio`, `saque` ou `outro`. Existe também `erro_adversario`: quando um jogador do time que **perdeu** o ponto errou (ex.: saque pra fora) — o `jogador_id` do evento é de quem errou, mas o `time_id` é do time que **ganhou** o ponto. Erro não conta como ponto marcado por quem errou: fica numa coluna "Erros" separada do Total e de fora do cálculo de MVP.
 - Vôlei possui a camada extra de **sets**: cada set tem seu próprio placar, e a partida é decidida pelo número de sets vencidos por cada time.
 - Futebol tem **cronômetro** persistido no banco (não é só um timer local): pode ser iniciado/pausado/zerado, sincroniza entre dispositivos vendo a mesma partida ao vivo, e não encerra sozinho ao bater o tempo configurado (só sinaliza "acréscimos") — quem encerra é o organizador.
 - Futebol permite registrar **cartões** (amarelo/vermelho) por jogador — é um registro avulso, não afeta placar nem escalação, só estatística.
@@ -83,7 +83,7 @@ Quando times empatam em pontos na classificação, o desempate segue esta ordem:
 ## 9. Estatísticas
 
 - Por racha e por grupo (acumulado entre rachas da mesma modalidade), e por jogador individual.
-- Tabela de pontos por motivo (vôlei): quantos pontos cada jogador fez de ataque/bloqueio/saque/outro, mais quantos jogos disputou. Pontos sem autor ficam agrupados numa linha "Sem autor" fixada por último.
+- Tabela de pontos por motivo (vôlei): quantos pontos cada jogador fez de pinga/lob/corte/bloqueio/saque/outro, mais quantos jogos disputou e quantos erros cometeu (coluna própria, fora do Total). Pontos sem autor ficam agrupados numa linha "Sem autor" fixada por último.
 
 ## 10. Resumo das Entidades
 

@@ -112,9 +112,9 @@ create table eventos_ponto (
   partida_id uuid not null references partidas(id) on delete cascade,
   set_id uuid references sets(id) on delete cascade, -- só volei
   time_id uuid not null references times(id), -- time que ganhou o ponto
-  jogador_id uuid references jogadores(id), -- opcional: nem todo ponto tem autor (ex: erro adversário no vôlei)
+  jogador_id uuid references jogadores(id), -- opcional: nem todo ponto tem autor. Em erro_adversario, é quem ERROU (do time que perdeu o ponto) — time_id continua sendo de quem ganhou
   assistencia_jogador_id uuid references jogadores(id), -- opcional, só futebol
-  motivo text check (motivo in ('ataque', 'bloqueio', 'saque', 'erro_adversario', 'outro')),
+  motivo text check (motivo in ('pinga', 'lob', 'corte', 'bloqueio', 'saque', 'erro_adversario', 'outro')),
   created_at timestamptz not null default now()
 );
 

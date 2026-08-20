@@ -118,12 +118,13 @@ function desenharTabela(
 }
 
 function linhasMotivosParaTexto(linhas: LinhaMotivo[], mvpNome?: string) {
-  const colunas = ['Jogador', 'Jogos', 'Vitórias', ...COLUNAS_MOTIVO.map((m) => LABEL_MOTIVO[m]), 'Total']
+  const colunas = ['Jogador', 'Jogos', 'Vitórias', ...COLUNAS_MOTIVO.map((m) => LABEL_MOTIVO[m]), 'Erros', 'Total']
   const linhasTexto = linhas.map((l) => [
     l.nome,
     String(l.jogos),
     l.nome === 'Sem autor' ? '-' : String(l.vitorias),
     ...COLUNAS_MOTIVO.map((m) => String(l.porMotivo[m] ?? 0)),
+    l.nome === 'Sem autor' ? '-' : String(l.erros),
     String(l.total),
   ])
   return { colunas, linhasTexto, nomesLinha: linhas.map((l) => l.nome), comBadgeMvp: !!mvpNome }

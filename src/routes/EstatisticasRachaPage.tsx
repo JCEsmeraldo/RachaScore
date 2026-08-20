@@ -8,7 +8,12 @@ import { ResumoJogador } from '../components/ResumoJogador'
 import { gerarImagemClassificacao, gerarImagemCombinada, compartilharImagem } from '../lib/exportarImagem'
 import type { ClassificacaoTime, Racha } from '../lib/types'
 
-type EventoComPartida = { partida_id: string; jogador_id: string | null; jogadores: { nome: string } | null }
+type EventoComPartida = {
+  partida_id: string
+  jogador_id: string | null
+  motivo: string | null
+  jogadores: { nome: string } | null
+}
 
 export function EstatisticasRachaPage() {
   const { grupoId, rachaId } = useParams<{ grupoId: string; rachaId: string }>()
@@ -193,7 +198,8 @@ export function EstatisticasRachaPage() {
     if (!jogadorAberto) return []
     const porPartida = new Map<string, number>()
     for (const ev of eventos) {
-      if (ev.jogadores?.nome !== jogadorAberto) continue
+      // erro do adversário não é ponto marcado por esse jogador — não entra na evolução
+      if (ev.jogadores?.nome !== jogadorAberto || ev.motivo === 'erro_adversario') continue
       porPartida.set(ev.partida_id, (porPartida.get(ev.partida_id) ?? 0) + 1)
     }
     return partidaIdsOrdenadas

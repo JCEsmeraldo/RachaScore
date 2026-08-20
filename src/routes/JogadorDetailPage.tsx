@@ -155,8 +155,13 @@ export function JogadorDetailPage() {
             (ev) => rachaModalidade.get(partidaRacha.get(ev.partida_id) ?? '') === 'volei',
           )
 
+          // erro do adversário não é ponto marcado por esse jogador — fora da contagem
+          // de pontos/evolução (mas continua indo pro montarTabelaMotivos, que separa
+          // certo numa coluna "Erros" própria)
+          const eventosVoleiPontos = eventosVolei.filter((ev) => ev.motivo !== 'erro_adversario')
+
           contadores.futebol.pontos = eventosFutebol.length
-          contadores.volei.pontos = eventosVolei.length
+          contadores.volei.pontos = eventosVoleiPontos.length
           contadores.volei.motivos = montarTabelaMotivos(eventosVolei)
 
           // evolução: soma de gols/pontos por racha (não por partida), em ordem cronológica
@@ -177,7 +182,7 @@ export function JogadorDetailPage() {
           }
 
           contadores.futebol.evolucao = montarEvolucao(eventosFutebol)
-          contadores.volei.evolucao = montarEvolucao(eventosVolei)
+          contadores.volei.evolucao = montarEvolucao(eventosVoleiPontos)
         }
       }
 

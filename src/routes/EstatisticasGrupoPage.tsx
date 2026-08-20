@@ -217,7 +217,8 @@ export function EstatisticasGrupoPage() {
     if (!jogadorAberto) return []
     const porRacha = new Map<string, number>()
     for (const ev of eventosVolei) {
-      if (ev.jogadores?.nome !== jogadorAberto) continue
+      // erro do adversário não é ponto marcado por esse jogador — não entra na evolução
+      if (ev.jogadores?.nome !== jogadorAberto || ev.motivo === 'erro_adversario') continue
       const rachaId = partidaRacha.get(ev.partida_id)
       if (!rachaId) continue
       porRacha.set(rachaId, (porRacha.get(rachaId) ?? 0) + 1)

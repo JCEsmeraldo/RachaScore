@@ -29,7 +29,9 @@ type EventoSumula = {
 }
 
 const MOTIVOS: { valor: MotivoPonto; label: string }[] = [
-  { valor: 'ataque', label: 'Ataque' },
+  { valor: 'pinga', label: 'Pinga' },
+  { valor: 'lob', label: 'Lob' },
+  { valor: 'corte', label: 'Corte' },
   { valor: 'bloqueio', label: 'Bloqueio' },
   { valor: 'saque', label: 'Saque' },
   { valor: 'outro', label: 'Outro' },
@@ -497,6 +499,8 @@ export function PartidaDetailPage() {
   const [ladoEsq, ladoDir] = invertido ? [ladoB, ladoA] : [ladoA, ladoB]
 
   function ColunaTime({ timeId, nome, jogadores }: { timeId: string; nome: string; jogadores: JogadorTime[] }) {
+    const timeAdversarioId = timeId === ladoA.id ? ladoB.id : ladoA.id
+
     return (
       <div className="space-y-2">
         <h3 className="text-sm font-medium text-neutral-400">{nome}</h3>
@@ -532,6 +536,16 @@ export function PartidaDetailPage() {
                       🟥
                     </button>
                   </>
+                )}
+                {ehVolei && (
+                  <button
+                    type="button"
+                    onClick={() => handlePonto(timeAdversarioId, j.jogador_id, 'erro_adversario')}
+                    title="Erro — ponto pro adversário"
+                    className="rounded-lg border border-neutral-800 px-2 text-xs text-neutral-500 hover:border-red-400 hover:text-red-400"
+                  >
+                    Erro
+                  </button>
                 )}
               </div>
               {expandido === j.jogador_id && (

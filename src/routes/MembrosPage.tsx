@@ -160,8 +160,9 @@ export function MembrosPage() {
       ``,
       `${nomeJogador}, você já tem histórico e estatísticas registrados no grupo "${grupo?.nome ?? ''}" como convidado.`,
       `Entra com sua conta (ou cria uma) nesse link pra assumir esse perfil e não perder nada:`,
+      url,
     ].join('\n')
-    const resultado = await compartilhar(texto, url)
+    const resultado = await compartilhar(texto)
 
     if (resultado.erro) {
       setErro(resultado.erro)

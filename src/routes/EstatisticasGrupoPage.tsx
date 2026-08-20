@@ -2,7 +2,15 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { supabase, buscarTudo } from '../lib/supabaseClient'
-import { contarJogosEVitorias, montarTabelaMotivos, type LinhaMotivo } from '../lib/estatisticas'
+import {
+  contarJogosEVitorias,
+  montarTabelaMotivos,
+  calcularResumoExtra,
+  type LinhaMotivo,
+  type PartidaComData,
+  type EscalacaoParaJogos,
+  type PresencaParaJogos,
+} from '../lib/estatisticas'
 import { TabelaMotivos } from '../components/TabelaMotivos'
 import { ResumoJogador } from '../components/ResumoJogador'
 
@@ -33,6 +41,10 @@ export function EstatisticasGrupoPage() {
   const [partidaRacha, setPartidaRacha] = useState<Map<string, string>>(new Map())
   const [rachaDataHora, setRachaDataHora] = useState<Map<string, string>>(new Map())
   const [jogadorAberto, setJogadorAberto] = useState<string | null>(null)
+  const [partidasVoleiState, setPartidasVoleiState] = useState<PartidaComData[]>([])
+  const [escalacoesVoleiState, setEscalacoesVoleiState] = useState<EscalacaoParaJogos[]>([])
+  const [presencasVoleiState, setPresencasVoleiState] = useState<PresencaParaJogos[]>([])
+  const [nomePorJogadorIdState, setNomePorJogadorIdState] = useState<Map<string, string>>(new Map())
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
 
@@ -64,7 +76,7 @@ export function EstatisticasGrupoPage() {
 
       const { data: partidasData, error: erroPartidas } = await supabase
         .from('partidas')
-        .select('id, racha_id, time_a_id, time_b_id, vencedor_id, status')
+        .select('id, racha_id, time_a_id, time_b_id, vencedor_id, status, created_at')
         .in('racha_id', rachaIds)
 
       if (erroPartidas) {
@@ -171,6 +183,11 @@ export function EstatisticasGrupoPage() {
           )
 
           const nomePorJogadorId = new Map(presencas.map((p) => [p.jogador_id, p.jogadores?.nome ?? '?']))
+          setNomePorJogadorIdState(nomePorJogadorId)
+          setPartidasVoleiState(partidasVolei)
+          setEscalacoesVoleiState(escalacoes.filter((e) => partidasVolei.some((p) => p.id === e.partida_id)))
+          setPresencasVoleiState(presencas)
+
           const statsPorNome = new Map<string, { jogos: number; vitorias: number }>()
           for (const [jogadorId, stats] of statsPorJogadorId) {
             const nome = nomePorJogadorId.get(jogadorId)
@@ -232,6 +249,13 @@ export function EstatisticasGrupoPage() {
       }))
   }, [jogadorAberto, eventosVolei, partidaRacha, rachaDataHora])
 
+  const resumoExtra = useMemo(() => {
+    if (!jogadorAberto) return null
+    const jogadorId = [...nomePorJogadorIdState.entries()].find(([, nome]) => nome === jogadorAberto)?.[0]
+    if (!jogadorId) return null
+    return calcularResumoExtra(partidasVoleiState, escalacoesVoleiState, presencasVoleiState, jogadorId, nomePorJogadorIdState)
+  }, [jogadorAberto, partidasVoleiState, escalacoesVoleiState, presencasVoleiState, nomePorJogadorIdState])
+
   function renderModalidade(nome: string, stats: StatsModalidade, labelPontuador: string, mostrarMotivo: boolean) {
     if (stats.totalRachas === 0) return null
 
@@ -276,7 +300,14 @@ export function EstatisticasGrupoPage() {
               <div className="space-y-3 rounded-lg border border-neutral-800 bg-neutral-900 p-4">
                 {(() => {
                   const linha = stats.motivos.find((m) => m.nome === jogadorAberto)
-                  return linha ? <ResumoJogador linha={linha} /> : null
+                  return linha ? (
+                    <ResumoJogador
+                      linha={linha}
+                      todasLinhas={stats.motivos}
+                      streak={resumoExtra?.streak}
+                      parceiro={resumoExtra?.parceiro}
+                    />
+                  ) : null
                 })()}
 
                 <p className="text-sm text-neutral-400">Pontos por racha — {jogadorAberto}</p>

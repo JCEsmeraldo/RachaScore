@@ -2,7 +2,15 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { supabase } from '../lib/supabaseClient'
-import { contarJogosEVitorias, montarTabelaMotivos, type LinhaMotivo } from '../lib/estatisticas'
+import {
+  contarJogosEVitorias,
+  montarTabelaMotivos,
+  calcularResumoExtra,
+  type LinhaMotivo,
+  type PartidaComData,
+  type EscalacaoParaJogos,
+  type PresencaParaJogos,
+} from '../lib/estatisticas'
 import { TabelaMotivos } from '../components/TabelaMotivos'
 import { ResumoJogador } from '../components/ResumoJogador'
 import { gerarImagemClassificacao, gerarImagemCombinada, compartilharImagem } from '../lib/exportarImagem'
@@ -24,6 +32,10 @@ export function EstatisticasRachaPage() {
   const [motivos, setMotivos] = useState<LinhaMotivo[]>([])
   const [eventos, setEventos] = useState<EventoComPartida[]>([])
   const [partidaIdsOrdenadas, setPartidaIdsOrdenadas] = useState<string[]>([])
+  const [partidasComData, setPartidasComData] = useState<PartidaComData[]>([])
+  const [escalacoes, setEscalacoes] = useState<EscalacaoParaJogos[]>([])
+  const [presencasVolei, setPresencasVolei] = useState<PresencaParaJogos[]>([])
+  const [nomePorJogadorId, setNomePorJogadorId] = useState<Map<string, string>>(new Map())
   const [jogadorAberto, setJogadorAberto] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
@@ -73,6 +85,7 @@ export function EstatisticasRachaPage() {
       const partidas = partidasData ?? []
       const partidaIds = partidas.map((p) => p.id)
       setPartidaIdsOrdenadas(partidaIds)
+      setPartidasComData(partidas)
 
       if (partidaIds.length > 0) {
         const [{ data: eventosData, error: erroEventos }, { data: escalacoesData }, { data: presencasData }] =
@@ -129,6 +142,10 @@ export function EstatisticasRachaPage() {
             )
 
             const nomePorJogadorId = new Map(presencas.map((p) => [p.jogador_id, p.jogadores?.nome ?? '?']))
+            setNomePorJogadorId(nomePorJogadorId)
+            setEscalacoes(escalacoesData ?? [])
+            setPresencasVolei(presencas.map((p) => ({ racha_id: rachaId, jogador_id: p.jogador_id, time_id: p.time_id })))
+
             const statsPorNome = new Map<string, { jogos: number; vitorias: number }>()
             for (const [jogadorId, stats] of statsPorJogadorId) {
               const nome = nomePorJogadorId.get(jogadorId)
@@ -206,6 +223,13 @@ export function EstatisticasRachaPage() {
       .map((id, i) => ({ partida: `P${i + 1}`, pontos: porPartida.get(id) ?? 0 }))
       .filter((p) => p.pontos > 0)
   }, [jogadorAberto, eventos, partidaIdsOrdenadas])
+
+  const resumoExtra = useMemo(() => {
+    if (!jogadorAberto) return null
+    const jogadorId = [...nomePorJogadorId.entries()].find(([, nome]) => nome === jogadorAberto)?.[0]
+    if (!jogadorId) return null
+    return calcularResumoExtra(partidasComData, escalacoes, presencasVolei, jogadorId, nomePorJogadorId)
+  }, [jogadorAberto, partidasComData, escalacoes, presencasVolei, nomePorJogadorId])
 
   return (
     <div className="min-h-svh bg-neutral-950 px-4 py-6 text-white">
@@ -320,7 +344,14 @@ export function EstatisticasRachaPage() {
                   <div className="space-y-3 rounded-lg border border-neutral-800 bg-neutral-900 p-4">
                     {(() => {
                       const linha = motivos.find((m) => m.nome === jogadorAberto)
-                      return linha ? <ResumoJogador linha={linha} /> : null
+                      return linha ? (
+                        <ResumoJogador
+                          linha={linha}
+                          todasLinhas={motivos}
+                          streak={resumoExtra?.streak}
+                          parceiro={resumoExtra?.parceiro}
+                        />
+                      ) : null
                     })()}
 
                     <p className="text-sm text-neutral-400">Pontos por partida — {jogadorAberto}</p>

@@ -41,6 +41,160 @@ export type EscalacaoParaJogos = { partida_id: string; jogador_id: string; time_
 
 export type PresencaParaJogos = { racha_id: string; jogador_id: string; time_id: string | null }
 
+export type PartidaComData = PartidaParaJogos & { created_at: string }
+
+export type ResultadoPartida = { partidaId: string; timeId: string; createdAt: string; resultado: 'V' | 'D' | 'E' }
+
+// mesmos mapas de elegibilidade do contarJogosEVitorias, reaproveitados pelas
+// funções de sequência/parceiro abaixo
+function construirMapasElegibilidade(escalacoes: EscalacaoParaJogos[], presencas: PresencaParaJogos[]) {
+  const escalacaoPorPartida = new Map<string, Map<string, string>>()
+  for (const e of escalacoes) {
+    if (!escalacaoPorPartida.has(e.partida_id)) escalacaoPorPartida.set(e.partida_id, new Map())
+    escalacaoPorPartida.get(e.partida_id)!.set(e.jogador_id, e.time_id)
+  }
+
+  const presencaPorRacha = new Map<string, Map<string, string | null>>()
+  for (const p of presencas) {
+    if (!presencaPorRacha.has(p.racha_id)) presencaPorRacha.set(p.racha_id, new Map())
+    presencaPorRacha.get(p.racha_id)!.set(p.jogador_id, p.time_id)
+  }
+
+  return { escalacaoPorPartida, presencaPorRacha }
+}
+
+function timeDoJogadorNaPartida(
+  partida: PartidaComData,
+  escalacaoPorPartida: Map<string, Map<string, string>>,
+  presencaPorRacha: Map<string, Map<string, string | null>>,
+  jogadorId: string,
+): string | null {
+  const timeEscalado = escalacaoPorPartida.get(partida.id)?.get(jogadorId)
+  if (timeEscalado) return timeEscalado
+
+  const timePresenca = presencaPorRacha.get(partida.racha_id)?.get(jogadorId)
+  if (timePresenca && (timePresenca === partida.time_a_id || timePresenca === partida.time_b_id)) return timePresenca
+
+  return null
+}
+
+// sequência cronológica de resultados (V/D/E) de um jogador — base pro streak
+export function partidasDoJogador(
+  partidas: PartidaComData[],
+  escalacoes: EscalacaoParaJogos[],
+  presencas: PresencaParaJogos[],
+  jogadorId: string,
+): ResultadoPartida[] {
+  const { escalacaoPorPartida, presencaPorRacha } = construirMapasElegibilidade(escalacoes, presencas)
+
+  const resultados: ResultadoPartida[] = []
+  for (const partida of partidas) {
+    if (partida.status !== 'finalizada') continue
+
+    const timeId = timeDoJogadorNaPartida(partida, escalacaoPorPartida, presencaPorRacha, jogadorId)
+    if (!timeId) continue
+
+    const resultado: ResultadoPartida['resultado'] =
+      partida.vencedor_id === timeId ? 'V' : partida.vencedor_id === null ? 'E' : 'D'
+
+    resultados.push({ partidaId: partida.id, timeId, createdAt: partida.created_at, resultado })
+  }
+
+  return resultados.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+}
+
+// sequência atual (V ou D seguidas, a partir da partida mais recente) —
+// empate quebra a sequência, não conta pra nenhum dos dois lados
+export function calcularStreak(resultados: ResultadoPartida[]): { tipo: 'V' | 'D'; contagem: number } | null {
+  const semEmpate = resultados.filter((r) => r.resultado !== 'E')
+  if (semEmpate.length === 0) return null
+
+  const ultimo = semEmpate[semEmpate.length - 1].resultado as 'V' | 'D'
+  let contagem = 0
+  for (let i = semEmpate.length - 1; i >= 0; i--) {
+    if (semEmpate[i].resultado !== ultimo) break
+    contagem++
+  }
+
+  return { tipo: ultimo, contagem }
+}
+
+// parceiro de time com mais vitórias juntos (empate técnico desempata por
+// menos jogos juntos — parceria mais "eficiente")
+export function melhorParceiro(
+  partidas: PartidaComData[],
+  escalacoes: EscalacaoParaJogos[],
+  presencas: PresencaParaJogos[],
+  jogadorId: string,
+  nomePorJogadorId: Map<string, string>,
+): { nome: string; vitorias: number; jogos: number } | null {
+  const { escalacaoPorPartida, presencaPorRacha } = construirMapasElegibilidade(escalacoes, presencas)
+
+  const jogosPorParceiro = new Map<string, number>()
+  const vitoriasPorParceiro = new Map<string, number>()
+
+  for (const partida of partidas) {
+    if (partida.status !== 'finalizada') continue
+
+    const meuTimeId = timeDoJogadorNaPartida(partida, escalacaoPorPartida, presencaPorRacha, jogadorId)
+    if (!meuTimeId) continue
+
+    const escalados = escalacaoPorPartida.get(partida.id)
+    const companheiros: string[] = []
+
+    if (escalados && escalados.size > 0) {
+      for (const [outroId, timeId] of escalados) {
+        if (outroId !== jogadorId && timeId === meuTimeId) companheiros.push(outroId)
+      }
+    } else {
+      const mapaRacha = presencaPorRacha.get(partida.racha_id)
+      if (mapaRacha) {
+        for (const [outroId, timeId] of mapaRacha) {
+          if (outroId !== jogadorId && timeId === meuTimeId) companheiros.push(outroId)
+        }
+      }
+    }
+
+    const venceu = partida.vencedor_id === meuTimeId
+    for (const c of companheiros) {
+      jogosPorParceiro.set(c, (jogosPorParceiro.get(c) ?? 0) + 1)
+      if (venceu) vitoriasPorParceiro.set(c, (vitoriasPorParceiro.get(c) ?? 0) + 1)
+    }
+  }
+
+  let melhor: { jogadorId: string; vitorias: number; jogos: number } | null = null
+  for (const [id, vitorias] of vitoriasPorParceiro) {
+    const jogos = jogosPorParceiro.get(id) ?? 0
+    if (!melhor || vitorias > melhor.vitorias || (vitorias === melhor.vitorias && jogos < melhor.jogos)) {
+      melhor = { jogadorId: id, vitorias, jogos }
+    }
+  }
+
+  if (!melhor || melhor.vitorias === 0) return null
+  return { nome: nomePorJogadorId.get(melhor.jogadorId) ?? '?', vitorias: melhor.vitorias, jogos: melhor.jogos }
+}
+
+export type ResumoExtra = {
+  streak: { tipo: 'V' | 'D'; contagem: number } | null
+  parceiro: { nome: string; vitorias: number; jogos: number } | null
+}
+
+// junta streak + melhor parceiro numa chamada só — usado tanto na tela do
+// racha quanto na do grupo (mesmo cálculo, dados só mudam de escopo)
+export function calcularResumoExtra(
+  partidas: PartidaComData[],
+  escalacoes: EscalacaoParaJogos[],
+  presencas: PresencaParaJogos[],
+  jogadorId: string,
+  nomePorJogadorId: Map<string, string>,
+): ResumoExtra {
+  const resultados = partidasDoJogador(partidas, escalacoes, presencas, jogadorId)
+  return {
+    streak: calcularStreak(resultados),
+    parceiro: melhorParceiro(partidas, escalacoes, presencas, jogadorId, nomePorJogadorId),
+  }
+}
+
 // "jogos"/"vitórias" de verdade = partidas finalizadas em que o jogador
 // realmente jogou/ganhou (escalação daquela partida no modo rápido, ou time
 // fixo do racha no torneio) — diferente de contar por eventos_ponto, que

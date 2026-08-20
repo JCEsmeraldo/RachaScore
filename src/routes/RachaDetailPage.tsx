@@ -109,8 +109,8 @@ export function RachaDetailPage() {
       ? `${window.location.origin}${import.meta.env.BASE_URL}convite/${grupoData.convite_token}?racha=${rachaId}`
       : null
 
-    const texto = gerarTextoCompartilhar(racha, confirmados, espera, linkConvite)
-    const resultado = await compartilhar(texto)
+    const texto = gerarTextoCompartilhar(racha, confirmados, espera)
+    const resultado = await compartilhar(texto, linkConvite ?? undefined)
 
     if (resultado.erro) {
       setErro(resultado.erro)

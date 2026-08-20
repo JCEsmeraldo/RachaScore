@@ -173,9 +173,12 @@ export function EstatisticasRachaPage() {
 
   const labelPontuador = racha?.modalidade === 'volei' ? 'Maiores pontuadores' : 'Artilheiros'
 
-  // mesmo critério do MVP calculado dentro de TabelaMotivos: maior Total entre
-  // jogadores de verdade, independente da ordenação da tela
-  const mvpNome = [...motivos].filter((l) => l.nome !== 'Sem autor').sort((a, b) => b.total - a.total)[0]?.nome
+  // mesmo critério de MVP/Pontuador calculado dentro de TabelaMotivos: MVP =
+  // maior saldo (Total - Erros), Pontuador = maior Total bruto — independente
+  // da ordenação da tela
+  const jogadoresDeVerdade = motivos.filter((l) => l.nome !== 'Sem autor')
+  const mvpNome = [...jogadoresDeVerdade].sort((a, b) => b.total - b.erros - (a.total - a.erros))[0]?.nome
+  const pontuadorNome = [...jogadoresDeVerdade].sort((a, b) => b.total - a.total)[0]?.nome
 
   async function handleExportarClassificacao() {
     setExportandoClass(true)
@@ -200,7 +203,7 @@ export function EstatisticasRachaPage() {
       const motivosOrdenados = [...motivos].sort(
         (a, b) => Number(a.nome === 'Sem autor') - Number(b.nome === 'Sem autor'),
       )
-      const blob = await gerarImagemCombinada(classificacao, motivosOrdenados, mvpNome)
+      const blob = await gerarImagemCombinada(classificacao, motivosOrdenados, mvpNome, pontuadorNome)
       const resultado = await compartilharImagem(blob, 'estatisticas-completas.png')
       if (resultado.baixado) {
         setTudoBaixado(true)
@@ -350,6 +353,7 @@ export function EstatisticasRachaPage() {
                           todasLinhas={motivos}
                           streak={resumoExtra?.streak}
                           parceiro={resumoExtra?.parceiro}
+                          ultimos5={resumoExtra?.ultimos5}
                         />
                       ) : null
                     })()}

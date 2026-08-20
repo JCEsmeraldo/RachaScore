@@ -9,6 +9,8 @@ const COR_TEXTO_FRACO = '#a3a3a3'
 const COR_CABECALHO = '#737373'
 const COR_MVP_BG = '#78350f'
 const COR_MVP_TEXTO = '#fbbf24'
+const COR_TOP_BG = '#0c4a6e'
+const COR_TOP_TEXTO = '#38bdf8'
 
 const FONTE_TITULO = '600 16px -apple-system, BlinkMacSystemFont, sans-serif'
 const FONTE_CABECALHO = '600 15px -apple-system, BlinkMacSystemFont, sans-serif'
@@ -29,8 +31,8 @@ function largura(ctx: CanvasRenderingContext2D, texto: string, fonte: string) {
 }
 
 // larguras de coluna: cabe o maior entre cabeçalho e todas as células daquela
-// coluna, mais o espaço extra pro selo MVP na primeira coluna quando precisa
-function calcularLargurasColuna(colunas: string[], linhasTexto: string[][], comBadgeMvp: boolean) {
+// coluna, mais o espaço extra pros selos MVP/TOP na primeira coluna quando precisa
+function calcularLargurasColuna(colunas: string[], linhasTexto: string[][], comBadges: boolean) {
   const ctx = medindo()
   return colunas.map((label, i) => {
     const larguraCabecalho = largura(ctx, label, FONTE_CABECALHO)
@@ -38,7 +40,9 @@ function calcularLargurasColuna(colunas: string[], linhasTexto: string[][], comB
       larguraCabecalho,
       ...linhasTexto.map((linha) => largura(ctx, linha[i], i === 0 ? FONTE_CELULA_BOLD : FONTE_CELULA)),
     )
-    const larguraBadge = i === 0 && comBadgeMvp ? 44 : 0
+    // reserva espaço pros dois selos (MVP + TOP) — mesmo quando só um aparece
+    // por linha, a coluna precisa caber a linha mais "cheia"
+    const larguraBadge = i === 0 && comBadges ? 90 : 0
     return larguraMax + PADDING_CELULA * 2 + larguraBadge
   })
 }
@@ -52,7 +56,7 @@ function desenharTabela(
   colunas: string[],
   largurasColuna: number[],
   linhasTexto: string[][],
-  opts: { mvpNome?: string; nomesLinha?: string[] } = {},
+  opts: { mvpNome?: string; pontuadorNome?: string; nomesLinha?: string[] } = {},
 ): number {
   let x = 0
   ctx.font = FONTE_CABECALHO
@@ -74,7 +78,11 @@ function desenharTabela(
   linhasTexto.forEach((linha, linhaIdx) => {
     const y = y0 + ALTURA_CABECALHO + linhaIdx * ALTURA_LINHA
     const nomeLinha = opts.nomesLinha?.[linhaIdx]
-    const ehMvp = !!nomeLinha && nomeLinha === opts.mvpNome
+    const badges: { texto: string; corBg: string; corTexto: string }[] = []
+    if (nomeLinha && nomeLinha === opts.mvpNome) badges.push({ texto: 'MVP', corBg: COR_MVP_BG, corTexto: COR_MVP_TEXTO })
+    if (nomeLinha && nomeLinha === opts.pontuadorNome && nomeLinha !== opts.mvpNome) {
+      badges.push({ texto: 'TOP', corBg: COR_TOP_BG, corTexto: COR_TOP_TEXTO })
+    }
 
     x = 0
     linha.forEach((valor, i) => {
@@ -82,21 +90,24 @@ function desenharTabela(
       ctx.fillStyle = i === 0 ? COR_TEXTO : COR_TEXTO_FRACO
       ctx.textAlign = i === 0 ? 'left' : 'center'
 
-      if (i === 0 && ehMvp && nomeLinha) {
+      if (i === 0 && badges.length > 0 && nomeLinha) {
         ctx.fillStyle = COR_TEXTO
         ctx.fillText(nomeLinha, x + PADDING_CELULA, y + ALTURA_LINHA / 2)
         const larguraNome = largura(ctx, nomeLinha, FONTE_CELULA_BOLD)
 
-        const badgeX = x + PADDING_CELULA + larguraNome + 8
-        const badgeLargura = largura(ctx, 'MVP', FONTE_BADGE) + 14
-        ctx.fillStyle = COR_MVP_BG
-        ctx.beginPath()
-        ;(ctx as any).roundRect(badgeX, y + ALTURA_LINHA / 2 - 10, badgeLargura, 20, 10)
-        ctx.fill()
-        ctx.font = FONTE_BADGE
-        ctx.fillStyle = COR_MVP_TEXTO
-        ctx.textAlign = 'left'
-        ctx.fillText('MVP', badgeX + 7, y + ALTURA_LINHA / 2 + 1)
+        let badgeX = x + PADDING_CELULA + larguraNome + 8
+        for (const badge of badges) {
+          const badgeLargura = largura(ctx, badge.texto, FONTE_BADGE) + 14
+          ctx.fillStyle = badge.corBg
+          ctx.beginPath()
+          ;(ctx as any).roundRect(badgeX, y + ALTURA_LINHA / 2 - 10, badgeLargura, 20, 10)
+          ctx.fill()
+          ctx.font = FONTE_BADGE
+          ctx.fillStyle = badge.corTexto
+          ctx.textAlign = 'left'
+          ctx.fillText(badge.texto, badgeX + 7, y + ALTURA_LINHA / 2 + 1)
+          badgeX += badgeLargura + 6
+        }
       } else {
         const cx = i === 0 ? x + PADDING_CELULA : x + largurasColuna[i] / 2
         ctx.fillText(valor, cx, y + ALTURA_LINHA / 2)
@@ -117,7 +128,7 @@ function desenharTabela(
   return ALTURA_CABECALHO + linhasTexto.length * ALTURA_LINHA
 }
 
-function linhasMotivosParaTexto(linhas: LinhaMotivo[], mvpNome?: string) {
+function linhasMotivosParaTexto(linhas: LinhaMotivo[], mvpNome?: string, pontuadorNome?: string) {
   const colunas = ['Jogador', 'Jogos', 'Vitórias', ...COLUNAS_MOTIVO.map((m) => LABEL_MOTIVO[m]), 'Erros', 'Total']
   const linhasTexto = linhas.map((l) => [
     l.nome,
@@ -127,7 +138,7 @@ function linhasMotivosParaTexto(linhas: LinhaMotivo[], mvpNome?: string) {
     l.nome === 'Sem autor' ? '-' : String(l.erros),
     String(l.total),
   ])
-  return { colunas, linhasTexto, nomesLinha: linhas.map((l) => l.nome), comBadgeMvp: !!mvpNome }
+  return { colunas, linhasTexto, nomesLinha: linhas.map((l) => l.nome), comBadges: !!mvpNome || !!pontuadorNome }
 }
 
 function classificacaoParaTexto(classificacao: ClassificacaoTime[]) {
@@ -153,9 +164,13 @@ function finalizarCanvas(canvas: HTMLCanvasElement): Promise<Blob> {
 // desenha a tabela num canvas (sem libs externas) e devolve um PNG — assim
 // dá pra compartilhar/baixar a imagem inteira, sem cortar coluna como o print
 // de tela cortava quando a tabela era mais larga que a viewport
-export async function gerarImagemTabelaMotivos(linhas: LinhaMotivo[], mvpNome?: string): Promise<Blob> {
-  const { colunas, linhasTexto, nomesLinha, comBadgeMvp } = linhasMotivosParaTexto(linhas, mvpNome)
-  const largurasColuna = calcularLargurasColuna(colunas, linhasTexto, comBadgeMvp)
+export async function gerarImagemTabelaMotivos(
+  linhas: LinhaMotivo[],
+  mvpNome?: string,
+  pontuadorNome?: string,
+): Promise<Blob> {
+  const { colunas, linhasTexto, nomesLinha, comBadges } = linhasMotivosParaTexto(linhas, mvpNome, pontuadorNome)
+  const largurasColuna = calcularLargurasColuna(colunas, linhasTexto, comBadges)
   const larguraTotal = largurasColuna.reduce((a, b) => a + b, 0)
   const alturaTabela = ALTURA_CABECALHO + linhasTexto.length * ALTURA_LINHA
   const alturaTotal = alturaTabela + 24
@@ -171,7 +186,7 @@ export async function gerarImagemTabelaMotivos(linhas: LinhaMotivo[], mvpNome?: 
   ctx.fillStyle = COR_LINHA
   ctx.fillRect(0, 12, larguraTotal, alturaTotal - 24)
 
-  desenharTabela(ctx, 12, larguraTotal, colunas, largurasColuna, linhasTexto, { mvpNome, nomesLinha })
+  desenharTabela(ctx, 12, larguraTotal, colunas, largurasColuna, linhasTexto, { mvpNome, pontuadorNome, nomesLinha })
 
   return finalizarCanvas(canvas)
 }
@@ -206,12 +221,13 @@ export async function gerarImagemCombinada(
   classificacao: ClassificacaoTime[],
   linhasMotivos: LinhaMotivo[],
   mvpNome?: string,
+  pontuadorNome?: string,
 ): Promise<Blob> {
   const class_ = classificacaoParaTexto(classificacao)
-  const motivos = linhasMotivosParaTexto(linhasMotivos, mvpNome)
+  const motivos = linhasMotivosParaTexto(linhasMotivos, mvpNome, pontuadorNome)
 
   const largurasClass = calcularLargurasColuna(class_.colunas, class_.linhasTexto, false)
-  const largurasMotivos = calcularLargurasColuna(motivos.colunas, motivos.linhasTexto, motivos.comBadgeMvp)
+  const largurasMotivos = calcularLargurasColuna(motivos.colunas, motivos.linhasTexto, motivos.comBadges)
 
   const larguraTotal = Math.max(
     largurasClass.reduce((a, b) => a + b, 0),
@@ -260,6 +276,7 @@ export async function gerarImagemCombinada(
   ctx.fillRect(0, y + 12, larguraTotal, alturaMotivos)
   desenharTabela(ctx, y + 12, larguraTotal, motivos.colunas, largurasMotivos, motivos.linhasTexto, {
     mvpNome,
+    pontuadorNome,
     nomesLinha: motivos.nomesLinha,
   })
 

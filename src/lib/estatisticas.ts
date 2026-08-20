@@ -177,10 +177,12 @@ export function melhorParceiro(
 export type ResumoExtra = {
   streak: { tipo: 'V' | 'D'; contagem: number } | null
   parceiro: { nome: string; vitorias: number; jogos: number } | null
+  ultimos5: ('V' | 'D' | 'E')[]
 }
 
-// junta streak + melhor parceiro numa chamada só — usado tanto na tela do
-// racha quanto na do grupo (mesmo cálculo, dados só mudam de escopo)
+// junta streak + melhor parceiro + últimos 5 resultados numa chamada só —
+// usado tanto na tela do racha quanto na do grupo (mesmo cálculo, dados só
+// mudam de escopo)
 export function calcularResumoExtra(
   partidas: PartidaComData[],
   escalacoes: EscalacaoParaJogos[],
@@ -192,6 +194,9 @@ export function calcularResumoExtra(
   return {
     streak: calcularStreak(resultados),
     parceiro: melhorParceiro(partidas, escalacoes, presencas, jogadorId, nomePorJogadorId),
+    // já vem ordenado do mais antigo pro mais recente (mesma ordem cronológica
+    // do partidasDoJogador) — mantém a leitura esquerda→direita = passado→hoje
+    ultimos5: resultados.slice(-5).map((r) => r.resultado),
   }
 }
 

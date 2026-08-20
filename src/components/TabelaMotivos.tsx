@@ -52,9 +52,16 @@ export function TabelaMotivos({
     }
   }
 
-  // MVP = maior Total entre jogadores de verdade, sem depender da ordenação atual da tabela
+  // MVP = maior saldo (Total - Erros) entre jogadores de verdade — contribuição
+  // líquida, não só quem pontuou mais. Pontuador = maior Total bruto, à parte
+  // (pode ser um jogador diferente do MVP se ele também errou bastante).
+  // Nenhum dos dois depende da ordenação atual da tabela.
+  const jogadoresDeVerdade = mostrarMvp ? linhas.filter((l) => l.nome !== 'Sem autor') : []
   const mvpNome = mostrarMvp
-    ? [...linhas].filter((l) => l.nome !== 'Sem autor').sort((a, b) => b.total - a.total)[0]?.nome
+    ? [...jogadoresDeVerdade].sort((a, b) => b.total - b.erros - (a.total - a.erros))[0]?.nome
+    : undefined
+  const pontuadorNome = mostrarMvp
+    ? [...jogadoresDeVerdade].sort((a, b) => b.total - a.total)[0]?.nome
     : undefined
 
   // "Sem autor" não representa um jogador de verdade — fica sempre no fim, fora da ordenação
@@ -71,7 +78,7 @@ export function TabelaMotivos({
     setExportando(true)
     try {
       // mesma ordem que a pessoa tá vendo na tela, incluindo a ordenação que ela escolheu
-      const blob = await gerarImagemTabelaMotivos(linhasOrdenadas, mvpNome)
+      const blob = await gerarImagemTabelaMotivos(linhasOrdenadas, mvpNome, pontuadorNome)
       const resultado = await compartilharImagem(blob, 'estatisticas.png')
       if (resultado.baixado) {
         setBaixado(true)
@@ -148,6 +155,11 @@ export function TabelaMotivos({
                     {linha.nome === mvpNome && (
                       <span className="ml-1 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-400">
                         MVP
+                      </span>
+                    )}
+                    {linha.nome === pontuadorNome && linha.nome !== mvpNome && (
+                      <span className="ml-1 rounded-full bg-sky-500/15 px-1.5 py-0.5 text-xs text-sky-400">
+                        TOP
                       </span>
                     )}
                   </td>

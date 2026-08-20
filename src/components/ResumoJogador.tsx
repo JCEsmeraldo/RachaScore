@@ -3,16 +3,24 @@ import { COLUNAS_MOTIVO, LABEL_MOTIVO, type LinhaMotivo } from '../lib/estatisti
 // resumo rápido de um jogador: médias (pontos, erros, aproveitamento), % de
 // cada motivo — todos comparados com a média do grupo/racha —, sequência
 // atual de vitórias/derrotas e melhor parceiro de time
+const COR_RESULTADO: Record<'V' | 'D' | 'E', string> = {
+  V: 'bg-emerald-500/20 text-emerald-400',
+  D: 'bg-red-500/20 text-red-400',
+  E: 'bg-neutral-700 text-neutral-300',
+}
+
 export function ResumoJogador({
   linha,
   todasLinhas,
   streak,
   parceiro,
+  ultimos5,
 }: {
   linha: LinhaMotivo
   todasLinhas: LinhaMotivo[]
   streak?: { tipo: 'V' | 'D'; contagem: number } | null
   parceiro?: { nome: string; vitorias: number; jogos: number } | null
+  ultimos5?: ('V' | 'D' | 'E')[]
 }) {
   const mediaPontos = linha.jogos > 0 ? linha.total / linha.jogos : null
   const mediaErros = linha.jogos > 0 ? linha.erros / linha.jogos : null
@@ -69,6 +77,19 @@ export function ResumoJogador({
             )
           })}
           {linha.erros > 0 && <span className="text-red-400">Erros {linha.erros}</span>}
+        </div>
+      )}
+
+      {ultimos5 && ultimos5.length > 0 && (
+        <div className="flex items-center justify-center gap-1">
+          {ultimos5.map((r, i) => (
+            <span
+              key={i}
+              className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium ${COR_RESULTADO[r]}`}
+            >
+              {r}
+            </span>
+          ))}
         </div>
       )}
 

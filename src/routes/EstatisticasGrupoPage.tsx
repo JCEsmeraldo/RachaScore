@@ -306,6 +306,7 @@ export function EstatisticasGrupoPage() {
                       todasLinhas={stats.motivos}
                       streak={resumoExtra?.streak}
                       parceiro={resumoExtra?.parceiro}
+                      ultimos5={resumoExtra?.ultimos5}
                     />
                   ) : null
                 })()}

@@ -511,7 +511,7 @@ export function PartidaDetailPage() {
               <div className="flex gap-1">
                 <button
                   onClick={() => handleClicarJogador(j.jogador_id)}
-                  className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 px-2 py-2 text-sm hover:border-emerald-500"
+                  className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 px-2 py-2 text-sm hover:border-emerald-500 disabled:opacity-40"
                 >
                   +1 {j.nome}
                   {cartoesJ.amarelo > 0 && ` 🟨${cartoesJ.amarelo > 1 ? cartoesJ.amarelo : ''}`}
@@ -523,7 +523,7 @@ export function PartidaDetailPage() {
                       type="button"
                       onClick={() => handleCartao(j.jogador_id, 'amarelo')}
                       title="Cartão amarelo"
-                      className="rounded-lg border border-neutral-800 px-2 text-sm hover:border-amber-400"
+                      className="rounded-lg border border-neutral-800 px-2 text-sm hover:border-amber-400 disabled:opacity-40"
                     >
                       🟨
                     </button>
@@ -531,7 +531,7 @@ export function PartidaDetailPage() {
                       type="button"
                       onClick={() => handleCartao(j.jogador_id, 'vermelho')}
                       title="Cartão vermelho"
-                      className="rounded-lg border border-neutral-800 px-2 text-sm hover:border-red-400"
+                      className="rounded-lg border border-neutral-800 px-2 text-sm hover:border-red-400 disabled:opacity-40"
                     >
                       🟥
                     </button>
@@ -542,7 +542,7 @@ export function PartidaDetailPage() {
                     type="button"
                     onClick={() => handlePonto(timeAdversarioId, j.jogador_id, 'erro_adversario')}
                     title="Erro — ponto pro adversário"
-                    className="rounded-lg border border-neutral-800 px-2 text-xs text-neutral-500 hover:border-red-400 hover:text-red-400"
+                    className="rounded-lg border border-neutral-800 px-2 text-xs text-neutral-500 hover:border-red-400 hover:text-red-400 disabled:opacity-40"
                   >
                     Erro
                   </button>
@@ -556,7 +556,7 @@ export function PartidaDetailPage() {
                           key={m.valor}
                           type="button"
                           onClick={() => handleEscolherMotivo(timeId, j.jogador_id, m.valor)}
-                          className="rounded-full bg-neutral-800 px-2 py-1 text-xs text-neutral-200 hover:bg-emerald-500/20 hover:text-emerald-400"
+                          className="rounded-full bg-neutral-800 px-2 py-1 text-xs text-neutral-200 hover:bg-emerald-500/20 hover:text-emerald-400 disabled:opacity-40"
                         >
                           {m.label}
                         </button>
@@ -566,7 +566,7 @@ export function PartidaDetailPage() {
                           <button
                             type="button"
                             onClick={() => handleEscolherAssistencia(timeId, j.jogador_id, null)}
-                            className="rounded-full bg-neutral-800 px-2 py-1 text-xs text-neutral-400 hover:bg-emerald-500/20 hover:text-emerald-400"
+                            className="rounded-full bg-neutral-800 px-2 py-1 text-xs text-neutral-400 hover:bg-emerald-500/20 hover:text-emerald-400 disabled:opacity-40"
                           >
                             Sem assistência
                           </button>
@@ -577,7 +577,7 @@ export function PartidaDetailPage() {
                                 key={t.jogador_id}
                                 type="button"
                                 onClick={() => handleEscolherAssistencia(timeId, j.jogador_id, t.jogador_id)}
-                                className="rounded-full bg-neutral-800 px-2 py-1 text-xs text-neutral-200 hover:bg-emerald-500/20 hover:text-emerald-400"
+                                className="rounded-full bg-neutral-800 px-2 py-1 text-xs text-neutral-200 hover:bg-emerald-500/20 hover:text-emerald-400 disabled:opacity-40"
                               >
                                 {t.nome}
                               </button>
@@ -591,7 +591,7 @@ export function PartidaDetailPage() {
         })}
         <button
           onClick={() => handlePonto(timeId, null, null)}
-          className="w-full rounded-lg border border-neutral-800 px-2 py-2 text-xs text-neutral-500 hover:border-neutral-600"
+          className="w-full rounded-lg border border-neutral-800 px-2 py-2 text-xs text-neutral-500 hover:border-neutral-600 disabled:opacity-40"
         >
           +1 sem autor
         </button>
@@ -682,6 +682,13 @@ export function PartidaDetailPage() {
           >
             ↩ Desfazer último ponto
           </button>
+        )}
+
+        {salvando && (
+          <p className="flex items-center justify-center gap-2 text-xs text-neutral-500">
+            <span className="h-3 w-3 animate-spin rounded-full border-2 border-neutral-700 border-t-emerald-400" />
+            Salvando...
+          </p>
         )}
 
         {erro && <p className="text-sm text-red-400">{erro}</p>}

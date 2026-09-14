@@ -101,6 +101,14 @@ export function CriarPartidaPage() {
       .filter((nome): nome is string => !!nome)
   }
 
+  // mesmo conjunto de jogadores, independente da ordem — usado pra bloquear
+  // time personalizado com a composição idêntica a um time que já existe
+  function mesmosMembros(a: string[], b: string[]): boolean {
+    if (a.length !== b.length) return false
+    const setA = new Set(a)
+    return b.every((id) => setA.has(id))
+  }
+
   function sugerirNomeDupla(nomes: string[]): string {
     return nomes
       .map((nome) => {
@@ -194,6 +202,22 @@ export function CriarPartidaPage() {
     if (jogadoresA.some((id) => jogadoresB.includes(id))) {
       setErro('Um jogador não pode estar nos dois times')
       return
+    }
+
+    if (ladoASelecao === CUSTOM) {
+      const timeIgual = times.find((t) => mesmosMembros(jogadoresDoTime(t.id).map((j) => j.jogador_id), jogadoresA))
+      if (timeIgual) {
+        setErro(`Já existe um time com esses jogadores: "${timeIgual.nome}"`)
+        return
+      }
+    }
+
+    if (ladoBSelecao === CUSTOM) {
+      const timeIgual = times.find((t) => mesmosMembros(jogadoresDoTime(t.id).map((j) => j.jogador_id), jogadoresB))
+      if (timeIgual) {
+        setErro(`Já existe um time com esses jogadores: "${timeIgual.nome}"`)
+        return
+      }
     }
 
     if (ladoASelecao === CUSTOM && !customNomeA.trim()) {

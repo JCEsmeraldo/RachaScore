@@ -49,6 +49,7 @@ Times (`times`) pertencem a um racha e nunca são fixos entre rachas diferentes.
 - **Rápido**: ao criar uma partida, o organizador escolhe pra cada lado um time já sorteado (reaproveitando a composição atual) ou monta um **time personalizado** na hora (nome + jogadores escolhidos avulsamente). O mesmo jogador não pode estar nos dois lados da mesma partida. A composição de cada partida fica registrada em `escalacoes_partida`, sem prender ninguém a um time fixo pro racha inteiro — o objetivo é permitir que times mudem a cada jogo (ex.: vôlei de 6 revezando parceiros).
 - **Re-sortear** (torneio) não apaga times que já têm partida registrada (histórico); só limpa e recria os times "livres" (sem nenhuma partida associada). Se não houver nenhum time sorteado ainda quando o organizador for criar a primeira partida, o sorteio roda automaticamente antes de abrir a tela de nova partida.
 - Times marcados como `sorteio = true` (gerados pelo botão Sortear) não podem ser apagados manualmente — só os personalizados (criados na hora de montar uma partida) podem, contanto que não tenham partida registrada.
+- Um time personalizado não pode ter a mesma composição de jogadores de outro time que já existe no racha (validado no client, comparando por `jogador_id`, independente da ordem) — evita duas entidades diferentes representando a mesma dupla/trio nas estatísticas.
 
 ## 6. Partida e Placar
 

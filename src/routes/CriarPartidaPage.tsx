@@ -92,33 +92,67 @@ export function CriarPartidaPage() {
     carregar()
   }, [rachaId])
 
+  // time de 2 (dupla de vôlei): sugere "Primeiro Nome S. e Primeiro Nome S."
+  // a partir de quem foi marcado — só preenche o campo, não salva nada; dá
+  // pra editar o nome sugerido normalmente antes de criar a partida
+  function nomesDosJogadores(ids: string[]): string[] {
+    return ids
+      .map((id) => confirmados.find((p) => p.jogador_id === id)?.jogadores?.nome)
+      .filter((nome): nome is string => !!nome)
+  }
+
+  function sugerirNomeDupla(nomes: string[]): string {
+    return nomes
+      .map((nome) => {
+        const partes = nome.trim().split(/\s+/)
+        return partes.length > 1 ? `${partes[0]} ${partes[1][0]}.` : partes[0]
+      })
+      .join(' e ')
+  }
+
   function toggleCustomA(jogadorId: string) {
     setCustomJogadoresA((prev) => {
-      if (prev.includes(jogadorId)) return prev.filter((id) => id !== jogadorId)
-
-      const limite = racha?.tamanho_equipe
-      if (limite && prev.length >= limite) {
-        setErro(`Máximo ${limite} jogadores por time`)
-        return prev
+      let novo: string[]
+      if (prev.includes(jogadorId)) {
+        novo = prev.filter((id) => id !== jogadorId)
+      } else {
+        const limite = racha?.tamanho_equipe
+        if (limite && prev.length >= limite) {
+          setErro(`Máximo ${limite} jogadores por time`)
+          return prev
+        }
+        setErro(null)
+        novo = [...prev, jogadorId]
       }
 
-      setErro(null)
-      return [...prev, jogadorId]
+      if (racha?.tamanho_equipe === 2 && novo.length === 2) {
+        setCustomNomeA(sugerirNomeDupla(nomesDosJogadores(novo)))
+      }
+
+      return novo
     })
   }
 
   function toggleCustomB(jogadorId: string) {
     setCustomJogadoresB((prev) => {
-      if (prev.includes(jogadorId)) return prev.filter((id) => id !== jogadorId)
-
-      const limite = racha?.tamanho_equipe
-      if (limite && prev.length >= limite) {
-        setErro(`Máximo ${limite} jogadores por time`)
-        return prev
+      let novo: string[]
+      if (prev.includes(jogadorId)) {
+        novo = prev.filter((id) => id !== jogadorId)
+      } else {
+        const limite = racha?.tamanho_equipe
+        if (limite && prev.length >= limite) {
+          setErro(`Máximo ${limite} jogadores por time`)
+          return prev
+        }
+        setErro(null)
+        novo = [...prev, jogadorId]
       }
 
-      setErro(null)
-      return [...prev, jogadorId]
+      if (racha?.tamanho_equipe === 2 && novo.length === 2) {
+        setCustomNomeB(sugerirNomeDupla(nomesDosJogadores(novo)))
+      }
+
+      return novo
     })
   }
 

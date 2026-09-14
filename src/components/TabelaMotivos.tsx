@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { COLUNAS_MOTIVO, LABEL_MOTIVO, type LinhaMotivo } from '../lib/estatisticas'
 import { compartilharImagem, gerarImagemTabelaMotivos } from '../lib/exportarImagem'
 
-type Coluna = 'nome' | 'jogos' | 'vitorias' | 'erros' | 'total' | (typeof COLUNAS_MOTIVO)[number]
+type Coluna = 'nome' | 'jogos' | 'vitorias' | 'erros' | 'total' | 'saldo' | (typeof COLUNAS_MOTIVO)[number]
 
 export function TabelaMotivos({
   linhas,
@@ -40,6 +40,7 @@ export function TabelaMotivos({
     if (coluna === 'vitorias') return linha.vitorias
     if (coluna === 'erros') return linha.erros
     if (coluna === 'total') return linha.total
+    if (coluna === 'saldo') return linha.total - linha.erros
     return linha.porMotivo[coluna] ?? 0
   }
 
@@ -130,6 +131,7 @@ export function TabelaMotivos({
                 <Cabecalho key={m} coluna={m} label={LABEL_MOTIVO[m]} />
               ))}
               {mostrarErros && <Cabecalho coluna="erros" label="Erros" />}
+              {mostrarErros && <Cabecalho coluna="saldo" label="Saldo" />}
               <Cabecalho coluna="total" label="Total" />
             </tr>
           </thead>
@@ -175,6 +177,9 @@ export function TabelaMotivos({
                 ))}
                 {mostrarErros && (
                   <td className="px-2 py-2 text-center">{linha.nome === 'Sem autor' ? '-' : linha.erros}</td>
+                )}
+                {mostrarErros && (
+                  <td className="px-2 py-2 text-center">{linha.total - linha.erros}</td>
                 )}
                 <td className="px-2 py-2 text-center font-medium">{linha.total}</td>
               </tr>

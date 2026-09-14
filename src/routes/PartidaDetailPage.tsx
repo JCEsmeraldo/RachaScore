@@ -488,10 +488,13 @@ export function PartidaDetailPage() {
   }
 
   const ehVolei = racha.modalidade === 'volei'
-  const placarA = ehVolei ? (setAtual?.placar_a ?? 0) : partida.placar_a
-  const placarB = ehVolei ? (setAtual?.placar_b ?? 0) : partida.placar_b
   const finalizada = partida.status === 'finalizada'
   const umSetSo = ehVolei && (racha.config as ConfigVolei).num_sets === 1
+  // jogo de um set só é o set inteiro — sem set aberto (partida finalizada),
+  // o placar da partida é o do único set jogado, não zero
+  const unicoSet = umSetSo ? setAtual ?? setsAnteriores[0] ?? null : null
+  const placarA = ehVolei ? (umSetSo ? unicoSet?.placar_a ?? 0 : setAtual?.placar_a ?? 0) : partida.placar_a
+  const placarB = ehVolei ? (umSetSo ? unicoSet?.placar_b ?? 0 : setAtual?.placar_b ?? 0) : partida.placar_b
   const cronometroSegundos = segundosAoVivo(partida, agora)
 
   const ladoA = { id: partida.time_a_id, time: timeA, placar: placarA, jogadores: jogadoresA }
@@ -721,7 +724,7 @@ export function PartidaDetailPage() {
           </>
         )}
 
-        {setsAnteriores.length > 0 && (
+        {!umSetSo && setsAnteriores.length > 0 && (
           <div className="space-y-1">
             <h3 className="text-sm font-medium text-neutral-400">Sets anteriores</h3>
             {setsAnteriores.map((s) => (

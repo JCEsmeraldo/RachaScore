@@ -7,7 +7,7 @@ export function CriarRachaPage() {
   const { grupoId } = useParams<{ grupoId: string }>()
   const navigate = useNavigate()
 
-  const [modalidade, setModalidade] = useState<'futebol' | 'volei'>('futebol')
+  const [modalidade, setModalidade] = useState<'futebol' | 'volei'>('volei')
   const [modo, setModo] = useState<'torneio' | 'rapido'>('rapido')
   const [tamanhoEquipe, setTamanhoEquipe] = useState(5)
   const [dataHora, setDataHora] = useState('')

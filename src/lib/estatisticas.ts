@@ -28,9 +28,29 @@ export type VisaoTabela = 'total' | 'porJogo'
 // aparece esmaecida na visão por jogo
 export const MIN_JOGOS_MEDIA = 3
 
-export type ColunaTabela = 'nome' | 'jogos' | 'vitorias' | 'erros' | 'total' | 'saldo' | (typeof COLUNAS_MOTIVO)[number]
+// colunas de erro por tipo (só na visão Média por jogo, no lugar do "Erros"
+// agregado): erro_saque, erro_passe... e erro_sem_tipo pra erro antigo sem tipo
+export type ColunaErroTipo = `erro_${TipoErro}` | 'erro_sem_tipo'
+
+export type ColunaTabela =
+  | 'nome'
+  | 'jogos'
+  | 'vitorias'
+  | 'erros'
+  | 'total'
+  | 'saldo'
+  | (typeof COLUNAS_MOTIVO)[number]
+  | ColunaErroTipo
 
 export const SEM_AUTOR = 'Sem autor'
+
+// "Sem tipo" só vira coluna se alguém tiver erro sem tipo (erros anteriores à
+// tipificação) — senão é coluna sempre zerada
+export function colunasErroTipo(linhas: LinhaMotivo[]): ColunaErroTipo[] {
+  const colunas: ColunaErroTipo[] = TIPOS_ERRO.map((t) => `erro_${t.valor}` as const)
+  if (linhas.some((l) => l.errosSemTipo > 0)) colunas.push('erro_sem_tipo')
+  return colunas
+}
 
 // valor de uma coluna numa visão. null = não se aplica (mostra "-"): "Sem autor"
 // não é jogador (sem vitórias/erros, sem média) e jogador sem jogo não tem média
@@ -55,7 +75,11 @@ export function valorColuna(linha: LinhaMotivo, coluna: ColunaTabela, visao: Vis
         ? linha.total
         : coluna === 'saldo'
           ? linha.total - linha.erros
-          : (linha.porMotivo[coluna] ?? 0)
+          : coluna === 'erro_sem_tipo'
+            ? linha.errosSemTipo
+            : coluna.startsWith('erro_')
+              ? (linha.porTipoErro[coluna.slice('erro_'.length) as TipoErro] ?? 0)
+              : (linha.porMotivo[coluna as MotivoPonto] ?? 0)
 
   if (visao === 'total') return bruto
   if (semAutor || linha.jogos === 0) return null
@@ -65,7 +89,8 @@ export function valorColuna(linha: LinhaMotivo, coluna: ColunaTabela, visao: Vis
 export function formatarValorColuna(valor: string | number | null, coluna: ColunaTabela, visao: VisaoTabela): string {
   if (valor === null) return '-'
   if (typeof valor === 'string') return valor
-  if (visao === 'total') return String(valor)
+  // Jogos é sempre o total de partidas (inteiro), nunca média
+  if (visao === 'total' || coluna === 'jogos') return String(valor)
   return coluna === 'vitorias' ? `${Math.round(valor)}%` : valor.toFixed(1)
 }
 
@@ -76,7 +101,11 @@ export function labelColuna(coluna: ColunaTabela, visao: VisaoTabela): string {
   if (coluna === 'erros') return 'Erros'
   if (coluna === 'total') return 'Total'
   if (coluna === 'saldo') return 'Saldo'
-  return LABEL_MOTIVO[coluna]
+  if (coluna === 'erro_sem_tipo') return 'Sem tipo'
+  if (coluna.startsWith('erro_')) {
+    return TIPOS_ERRO.find((t) => t.valor === coluna.slice('erro_'.length))?.label ?? coluna
+  }
+  return LABEL_MOTIVO[coluna as MotivoPonto]
 }
 
 // "Sem autor" sempre por último (fora da ordenação); valor null vai pro fim da

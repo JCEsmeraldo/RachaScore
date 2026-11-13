@@ -1,5 +1,6 @@
 import {
   COLUNAS_MOTIVO,
+  colunasErroTipo,
   formatarValorColuna,
   labelColuna,
   valorColuna,
@@ -142,12 +143,14 @@ function linhasMotivosParaTexto(
   pontuadorNome?: string,
   visao: VisaoTabela = 'total',
 ) {
-  // mesma ordem da tela: o Saldo é sempre a última coluna
-  const ordem: ColunaTabela[] = ['jogos', 'vitorias', ...COLUNAS_MOTIVO, 'total', 'erros', 'saldo']
-  const colunas = [
-    visao === 'porJogo' ? 'Jogador · média por jogo' : 'Jogador',
-    ...ordem.map((c) => labelColuna(c, visao)),
-  ]
+  // mesma ordem da tela: o Saldo é sempre a última coluna. Na Média por jogo os
+  // erros saem por tipo, no lugar do "Erros" agregado
+  const colunasErros: ColunaTabela[] = visao === 'porJogo' ? colunasErroTipo(linhas) : ['erros']
+  const ordem: ColunaTabela[] = ['jogos', 'vitorias', ...COLUNAS_MOTIVO, 'total', ...colunasErros, 'saldo']
+  // sem a linha de grupo da tela: "Saque"/"Outro" de erro levam o prefixo "Erro"
+  const rotulo = (c: ColunaTabela) =>
+    c.startsWith('erro_') && c !== 'erro_sem_tipo' ? `Erro ${labelColuna(c, visao).toLowerCase()}` : labelColuna(c, visao)
+  const colunas = [visao === 'porJogo' ? 'Jogador · média por jogo' : 'Jogador', ...ordem.map(rotulo)]
   const linhasTexto = linhas.map((l) => [
     l.nome,
     ...ordem.map((c) => formatarValorColuna(valorColuna(l, c, visao), c, visao)),

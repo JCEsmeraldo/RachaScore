@@ -13,6 +13,20 @@ export const APP_VERSION = __APP_VERSION__
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.6.1',
+    date: '2026-11-13',
+    items: [
+      {
+        kind: 'improved',
+        text: 'Na aba "Média por jogo", os erros agora aparecem por tipo (Saque, Ataque fora, Ataque na rede, Passe, Toque na rede, Condução e Outro), uma coluna pra cada, no lugar do total de erros. A aba "Total" continua com o total.',
+      },
+      {
+        kind: 'fix',
+        text: 'Na aba "Média por jogo", a coluna Jogos aparecia com casa decimal (6.0). Agora mostra o total de jogos (6).',
+      },
+    ],
+  },
+  {
     version: '1.6.0',
     date: '2026-11-13',
     items: [

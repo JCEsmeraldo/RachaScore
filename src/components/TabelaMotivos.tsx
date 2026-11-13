@@ -4,6 +4,7 @@ import {
   MIN_JOGOS_MEDIA,
   SEM_AUTOR,
   calcularMvpEPontuador,
+  colunasErroTipo,
   formatarValorColuna,
   labelColuna,
   ordenarLinhas,
@@ -62,7 +63,21 @@ export function TabelaMotivos({
     ? calcularMvpEPontuador(linhas)
     : { mvpNome: undefined, pontuadorNome: undefined }
 
-  const linhasOrdenadas = ordenarLinhas(linhas, ordenarPor, ordemAsc, visaoAtiva)
+  // na Média por jogo os erros aparecem por tipo (uma coluna cada), no lugar do
+  // "Erros" agregado da visão Total
+  const colunasErros: ColunaTabela[] = visaoAtiva === 'porJogo' ? colunasErroTipo(linhas) : ['erros']
+  const colunasPontos = [...COLUNAS_MOTIVO, 'total'] as const
+  const colunasLead = [mostrarJogador, mostrarJogos, mostrarVitorias].filter(Boolean).length
+
+  // se a coluna de ordenação some ao trocar de visão, volta pro Saldo
+  const colunaOrdenacao: ColunaTabela =
+    ordenarPor === 'erros' || ordenarPor.startsWith('erro_')
+      ? colunasErros.includes(ordenarPor)
+        ? ordenarPor
+        : 'saldo'
+      : ordenarPor
+
+  const linhasOrdenadas = ordenarLinhas(linhas, colunaOrdenacao, ordemAsc, visaoAtiva)
 
   async function handleExportar() {
     setExportando(true)
@@ -88,7 +103,7 @@ export function TabelaMotivos({
           className="flex w-full items-center justify-center gap-1 hover:text-neutral-200"
         >
           {labelColuna(coluna, visaoAtiva)}
-          {ordenarPor === coluna && <span className="text-xs">{ordemAsc ? '▲' : '▼'}</span>}
+          {colunaOrdenacao === coluna && <span className="text-xs">{ordemAsc ? '▲' : '▼'}</span>}
         </button>
       </th>
     )
@@ -145,15 +160,30 @@ export function TabelaMotivos({
       <div className="overflow-x-auto rounded-lg border border-neutral-800 bg-neutral-900">
         <table className="w-full text-sm">
           <thead>
+            {visaoAtiva === 'porJogo' && (
+              // "Saque" e "Outro" existem como ponto e como erro — o grupo no
+              // topo diz de qual dos dois é cada coluna
+              <tr className="text-xs text-neutral-600">
+                {colunasLead > 0 && <th colSpan={colunasLead} />}
+                <th colSpan={colunasPontos.length} className="border-l border-neutral-800 px-2 pt-2 font-medium">
+                  Pontos por jogo
+                </th>
+                <th colSpan={colunasErros.length} className="border-l border-neutral-800 px-2 pt-2 font-medium text-red-400/70">
+                  Erros por jogo, por tipo
+                </th>
+                <th className="border-l border-neutral-800" />
+              </tr>
+            )}
             <tr className="border-b border-neutral-800 text-neutral-500">
               {mostrarJogador && <Cabecalho coluna="nome" />}
               {mostrarJogos && <Cabecalho coluna="jogos" />}
               {mostrarVitorias && <Cabecalho coluna="vitorias" />}
-              {COLUNAS_MOTIVO.map((m) => (
-                <Cabecalho key={m} coluna={m} />
+              {colunasPontos.map((c) => (
+                <Cabecalho key={c} coluna={c} />
               ))}
-              <Cabecalho coluna="total" />
-              <Cabecalho coluna="erros" />
+              {colunasErros.map((c) => (
+                <Cabecalho key={c} coluna={c} />
+              ))}
               <Cabecalho coluna="saldo" />
             </tr>
           </thead>
@@ -195,11 +225,12 @@ export function TabelaMotivos({
                   )}
                   {mostrarJogos && <Celula linha={linha} coluna="jogos" />}
                   {mostrarVitorias && <Celula linha={linha} coluna="vitorias" />}
-                  {COLUNAS_MOTIVO.map((m) => (
-                    <Celula key={m} linha={linha} coluna={m} />
+                  {colunasPontos.map((c) => (
+                    <Celula key={c} linha={linha} coluna={c} />
                   ))}
-                  <Celula linha={linha} coluna="total" />
-                  <Celula linha={linha} coluna="erros" />
+                  {colunasErros.map((c) => (
+                    <Celula key={c} linha={linha} coluna={c} />
+                  ))}
                   <Celula linha={linha} coluna="saldo" forte />
                 </tr>
               )

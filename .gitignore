@@ -20,7 +20,9 @@ dist-ssr
 .claude
 .agents
 skills-lock.json
-scripts
+# scripts locais (dev.sh etc.) ficam fora do git; só o check-release é versionado
+scripts/*
+!scripts/check-release.mjs
 .DS_Store
 *.suo
 *.ntvs*

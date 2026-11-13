@@ -9,6 +9,8 @@ Todo push com mudança visível ao usuário (commit `feat:` ou `fix:`) precisa s
 3. Commitar junto e criar a tag: `git tag -a vX.Y.Z -m vX.Y.Z`.
 4. Publicar com `git push --follow-tags origin main` (só com autorização do usuário).
 
-`npm run check-release` confere se a versão do `package.json` bate com o topo do changelog, se existe a tag e se há `feat:`/`fix:` depois da última tag. `chore:`/`docs:`/`refactor:` não exigem versão. Rode antes de pedir autorização de push.
+O hook `.githooks/pre-push` (`npm run check-release`) bloqueia o push se a versão do `package.json` não bater com o topo do changelog, se faltar a tag, ou se houver `feat:`/`fix:` depois da última tag. `chore:`/`docs:`/`refactor:` não exigem versão. Emergência: `git push --no-verify`.
+
+O hook é ativado por `npm install` (script `prepare` → `git config core.hooksPath .githooks`).
 
 Mudança de schema = arquivo datado em `supabase/` (ex.: `2026-11-tipo-erro.sql`) + `schema.sql` + `schema.dbml` no mesmo commit. O usuário roda o SQL no editor do Supabase **antes** do push quando o front depende dele.

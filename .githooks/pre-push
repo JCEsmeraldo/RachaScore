@@ -1,0 +1,3 @@
+#!/bin/sh
+# Bloqueia push com Novidades/versão desatualizadas (scripts/check-release.mjs).
+exec node scripts/check-release.mjs

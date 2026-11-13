@@ -22,6 +22,7 @@ type EventoComPartida = {
   partida_id: string
   jogador_id: string | null
   motivo: string | null
+  tipo_erro?: string | null
   jogadores: { nome: string } | null
 }
 
@@ -94,7 +95,7 @@ export function EstatisticasRachaPage() {
           await Promise.all([
             supabase
               .from('eventos_ponto')
-              .select('partida_id, jogador_id, motivo, jogadores!eventos_ponto_jogador_id_fkey(nome)')
+              .select('partida_id, jogador_id, motivo, tipo_erro, jogadores!eventos_ponto_jogador_id_fkey(nome)')
               .in('partida_id', partidaIds),
             supabase
               .from('escalacoes_partida')
@@ -114,6 +115,7 @@ export function EstatisticasRachaPage() {
             partida_id: string
             jogador_id: string | null
             motivo: string | null
+            tipo_erro: string | null
             jogadores: { nome: string } | null
           }[]
 

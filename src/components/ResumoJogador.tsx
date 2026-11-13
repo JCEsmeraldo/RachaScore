@@ -1,4 +1,4 @@
-import { COLUNAS_MOTIVO, LABEL_MOTIVO, type LinhaMotivo } from '../lib/estatisticas'
+import { COLUNAS_MOTIVO, LABEL_MOTIVO, TIPOS_ERRO, type LinhaMotivo } from '../lib/estatisticas'
 
 // resumo rápido de um jogador: médias (pontos, erros, aproveitamento), % de
 // cada motivo — todos comparados com a média do grupo/racha —, sequência
@@ -76,7 +76,26 @@ export function ResumoJogador({
               </span>
             )
           })}
-          {linha.erros > 0 && <span className="text-red-400">Erros {linha.erros}</span>}
+        </div>
+      )}
+
+      {linha.erros > 0 && (
+        <div className="space-y-1 text-center">
+          <p className="text-xs text-neutral-500">
+            Erros por tipo · <span className="text-red-400">{linha.erros} no total</span>
+          </p>
+          <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 text-xs text-neutral-400">
+            {TIPOS_ERRO.map((t) => {
+              const qtd = linha.porTipoErro[t.valor] ?? 0
+              if (qtd === 0) return null
+              return (
+                <span key={t.valor}>
+                  {t.label} {qtd} <span className="text-neutral-600">({Math.round((qtd / linha.erros) * 100)}%)</span>
+                </span>
+              )
+            })}
+            {linha.errosSemTipo > 0 && <span className="text-neutral-500">Sem tipo {linha.errosSemTipo}</span>}
+          </div>
         </div>
       )}
 

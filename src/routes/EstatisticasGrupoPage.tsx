@@ -18,6 +18,7 @@ type EventoParaMotivo = {
   partida_id: string
   jogador_id: string | null
   motivo: string | null
+  tipo_erro?: string | null
   jogadores: { nome: string } | null
 }
 
@@ -124,7 +125,7 @@ export function EstatisticasGrupoPage() {
             buscarTudo<unknown>(() =>
               supabase
                 .from('eventos_ponto')
-                .select('partida_id, jogador_id, motivo, jogadores!eventos_ponto_jogador_id_fkey(nome), partidas!inner(racha_id)')
+                .select('partida_id, jogador_id, motivo, tipo_erro, jogadores!eventos_ponto_jogador_id_fkey(nome), partidas!inner(racha_id)')
                 .in('partidas.racha_id', rachaIds),
             ),
             buscarTudo<unknown>(() =>

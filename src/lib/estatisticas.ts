@@ -128,12 +128,16 @@ export type LinhaMotivo = {
   porMotivo: Partial<Record<MotivoPonto, number>>
   total: number
   erros: number
+  // detalhamento dos erros (só aparece no resumo do jogador; a tabela soma tudo em "Erros")
+  porTipoErro: Partial<Record<TipoErro, number>>
+  errosSemTipo: number
 }
 
 type EventoParaMotivo = {
   partida_id: string
   jogador_id: string | null
   motivo: string | null
+  tipo_erro?: string | null
   jogadores: { nome: string } | null
 }
 
@@ -375,6 +379,8 @@ export function montarTabelaMotivos(eventos: EventoParaMotivo[]): LinhaMotivo[] 
   const porMotivo = new Map<string, Partial<Record<MotivoPonto, number>>>()
   const totais = new Map<string, number>()
   const errosPorNome = new Map<string, number>()
+  const errosPorTipo = new Map<string, Partial<Record<TipoErro, number>>>()
+  const errosSemTipoPorNome = new Map<string, number>()
   const partidasPorNome = new Map<string, Set<string>>()
 
   for (const ev of eventos) {
@@ -389,6 +395,15 @@ export function montarTabelaMotivos(eventos: EventoParaMotivo[]): LinhaMotivo[] 
     // própria (Erros), senão infla a estatística ofensiva de quem errou
     if (motivo === 'erro_adversario') {
       errosPorNome.set(nome, (errosPorNome.get(nome) ?? 0) + 1)
+
+      const tipo = ev.tipo_erro as TipoErro | null | undefined
+      if (tipo) {
+        if (!errosPorTipo.has(nome)) errosPorTipo.set(nome, {})
+        const registroErro = errosPorTipo.get(nome)!
+        registroErro[tipo] = (registroErro[tipo] ?? 0) + 1
+      } else {
+        errosSemTipoPorNome.set(nome, (errosSemTipoPorNome.get(nome) ?? 0) + 1)
+      }
       continue
     }
 
@@ -411,6 +426,8 @@ export function montarTabelaMotivos(eventos: EventoParaMotivo[]): LinhaMotivo[] 
       vitorias: 0, // sobrescrito por quem chama, com contarJogosEVitorias
       porMotivo: porMotivo.get(nome) ?? {},
       erros: errosPorNome.get(nome) ?? 0,
+      porTipoErro: errosPorTipo.get(nome) ?? {},
+      errosSemTipo: errosSemTipoPorNome.get(nome) ?? 0,
     }))
     .sort((a, b) => b.total - a.total)
 }

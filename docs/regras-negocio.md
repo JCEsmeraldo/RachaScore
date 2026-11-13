@@ -88,7 +88,8 @@ Quando times empatam em pontos na classificação, o desempate segue esta ordem:
 - Por racha e por grupo (acumulado entre rachas da mesma modalidade), e por jogador individual.
 - Tabela de pontos por motivo (vôlei): quantos pontos cada jogador fez de pinga/lob/corte/bloqueio/saque/outro, mais quantos jogos disputou e quantos erros cometeu (coluna própria, fora do Total). Pontos sem autor ficam agrupados numa linha "Sem autor" fixada por último.
   - Ordem das colunas: Jogador, Jogos, Vitórias, motivos, Total, Erros, **Saldo**. O Saldo (Total − Erros) é sempre a última coluna e é o que ordena a tabela por padrão (desempate por Total, depois por nome). Clicar noutro cabeçalho muda a ordenação.
-  - Os erros aparecem agregados num só valor, qualquer que seja o tipo — o tipo fica gravado no banco, mas não é aberto na tabela.
+  - Os erros aparecem agregados num só valor na tabela, qualquer que seja o tipo. O detalhamento por tipo (quantidade e % de cada um, mais "Sem tipo" pra erros sem tipo informado) aparece no resumo do jogador, ao tocar no nome dele nas estatísticas do racha e do grupo.
+  - Tela **Novidades** (`/novidades`, link ✨ na tela de grupos): changelog em linguagem de usuário por versão. A versão vem do `package.json`; ver `CLAUDE.md` pro fluxo de publicar.
   - Seletor **Total | Média por jogo** (só onde a tabela mostra Jogos): na média, motivos, Total, Erros e Saldo viram valor ÷ jogos (1 casa decimal) e Vitórias vira Aproveitamento (vitórias ÷ jogos, em %). "Sem autor" e jogador sem jogo mostram "-". Jogador com menos de 3 jogos aparece esmaecido na média, porque a média engana com amostra pequena. A exportação de imagem segue a visão da tela.
 
 ## 10. Resumo das Entidades

@@ -2,10 +2,12 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
+import { useUnseenChanges } from '../lib/changelog'
 import type { Grupo } from '../lib/types'
 
 export function GruposPage() {
   const { session, signOut } = useAuth()
+  const unseen = useUnseenChanges()
   const [grupos, setGrupos] = useState<Grupo[]>([])
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
@@ -57,6 +59,15 @@ export function GruposPage() {
         <header className="flex items-center justify-between">
           <h1 className="text-xl font-semibold">Meus grupos</h1>
           <div className="flex items-center gap-3 text-sm">
+            <Link to="/novidades" className="text-neutral-400 hover:text-neutral-200">
+              ✨ Novidades
+              {unseen && (
+                <span
+                  className="ml-1.5 inline-block size-1.5 rounded-full bg-emerald-400 align-middle"
+                  aria-label="novidade"
+                />
+              )}
+            </Link>
             <Link to="/instalar" className="text-neutral-400 hover:text-neutral-200">
               📲 Instalar
             </Link>

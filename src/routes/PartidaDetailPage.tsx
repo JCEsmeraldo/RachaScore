@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
-import { montarTabelaMotivos } from '../lib/estatisticas'
+import { TIPOS_ERRO, montarTabelaMotivos } from '../lib/estatisticas'
 import { TabelaMotivos } from '../components/TabelaMotivos'
 import type {
   Cartao,
@@ -14,6 +14,7 @@ import type {
   Racha,
   SetPartida,
   TipoCartao,
+  TipoErro,
   Time,
 } from '../lib/types'
 
@@ -73,7 +74,8 @@ export function PartidaDetailPage() {
   const [souOrganizador, setSouOrganizador] = useState(false)
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
-  const [expandido, setExpandido] = useState<string | null>(null)
+  // painel aberto embaixo de um jogador: motivos do ponto/assistência, ou tipos de erro
+  const [expandido, setExpandido] = useState<{ jogadorId: string; modo: 'ponto' | 'erro' } | null>(null)
   const [agora, setAgora] = useState(() => Date.now())
   const [cartoes, setCartoes] = useState<Cartao[]>([])
   const [eventos, setEventos] = useState<EventoSumula[]>([])
@@ -248,8 +250,13 @@ export function PartidaDetailPage() {
     return () => window.clearInterval(id)
   }, [partida?.cronometro_rodando])
 
-  function handleClicarJogador(jogadorId: string) {
-    setExpandido((atual) => (atual === jogadorId ? null : jogadorId))
+  function alternarPainel(jogadorId: string, modo: 'ponto' | 'erro') {
+    setExpandido((atual) => (atual?.jogadorId === jogadorId && atual.modo === modo ? null : { jogadorId, modo }))
+  }
+
+  function handleEscolherTipoErro(timeAdversarioId: string, jogadorId: string, tipoErro: TipoErro) {
+    setExpandido(null)
+    handlePonto(timeAdversarioId, jogadorId, 'erro_adversario', null, tipoErro)
   }
 
   function handleEscolherMotivo(timeId: string, jogadorId: string, motivo: MotivoPonto) {
@@ -267,6 +274,7 @@ export function PartidaDetailPage() {
     jogadorId: string | null,
     motivo: MotivoPonto | null,
     assistenciaJogadorId: string | null = null,
+    tipoErro: TipoErro | null = null,
   ) {
     if (!partidaId || !partida || !racha || !travar()) return
     setErro(null)
@@ -281,6 +289,7 @@ export function PartidaDetailPage() {
       jogador_id: jogadorId,
       assistencia_jogador_id: assistenciaJogadorId,
       motivo,
+      tipo_erro: tipoErro,
     })
 
     if (erroEvento) {
@@ -513,7 +522,7 @@ export function PartidaDetailPage() {
             <div key={j.jogador_id}>
               <div className="flex gap-1">
                 <button
-                  onClick={() => handleClicarJogador(j.jogador_id)}
+                  onClick={() => alternarPainel(j.jogador_id, 'ponto')}
                   className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 px-2 py-2 text-sm hover:border-emerald-500 disabled:opacity-40"
                 >
                   +1 {j.nome}
@@ -543,15 +552,38 @@ export function PartidaDetailPage() {
                 {ehVolei && (
                   <button
                     type="button"
-                    onClick={() => handlePonto(timeAdversarioId, j.jogador_id, 'erro_adversario')}
+                    onClick={() => alternarPainel(j.jogador_id, 'erro')}
                     title="Erro — ponto pro adversário"
-                    className="rounded-lg border border-neutral-800 px-2 text-xs text-neutral-500 hover:border-red-400 hover:text-red-400 disabled:opacity-40"
+                    className={`rounded-lg border px-2 text-xs hover:border-red-400 hover:text-red-400 disabled:opacity-40 ${
+                      expandido?.jogadorId === j.jogador_id && expandido.modo === 'erro'
+                        ? 'border-red-400 text-red-400'
+                        : 'border-neutral-800 text-neutral-500'
+                    }`}
                   >
                     Erro
                   </button>
                 )}
               </div>
-              {expandido === j.jogador_id && (
+              {ehVolei && expandido?.jogadorId === j.jogador_id && expandido.modo === 'erro' && (
+                <div className="mt-1 space-y-1 rounded-lg border border-red-500/40 bg-red-500/5 p-2">
+                  <p className="text-xs text-neutral-400">
+                    Tipo do erro · ponto pro {(timeAdversarioId === ladoA.id ? ladoA : ladoB).time?.nome}
+                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    {TIPOS_ERRO.map((t) => (
+                      <button
+                        key={t.valor}
+                        type="button"
+                        onClick={() => handleEscolherTipoErro(timeAdversarioId, j.jogador_id, t.valor)}
+                        className="rounded-full bg-neutral-800 px-2 py-1 text-xs text-neutral-200 hover:bg-red-500/20 hover:text-red-400 disabled:opacity-40"
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {expandido?.jogadorId === j.jogador_id && expandido.modo === 'ponto' && (
                 <div className="mt-1 flex flex-wrap gap-1 rounded-lg border border-emerald-500/40 bg-emerald-500/5 p-2">
                   {ehVolei
                     ? MOTIVOS.map((m) => (

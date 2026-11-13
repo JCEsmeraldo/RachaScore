@@ -115,6 +115,8 @@ create table eventos_ponto (
   jogador_id uuid references jogadores(id), -- opcional: nem todo ponto tem autor. Em erro_adversario, é quem ERROU (do time que perdeu o ponto) — time_id continua sendo de quem ganhou
   assistencia_jogador_id uuid references jogadores(id), -- opcional, só futebol
   motivo text check (motivo in ('pinga', 'lob', 'corte', 'bloqueio', 'saque', 'erro_adversario', 'outro')),
+  -- só quando motivo = 'erro_adversario'; null = erro sem tipo informado
+  tipo_erro text check (tipo_erro in ('saque', 'ataque_fora', 'ataque_rede', 'passe', 'toque_rede', 'conducao', 'outro')),
   created_at timestamptz not null default now()
 );
 

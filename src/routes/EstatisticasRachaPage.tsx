@@ -6,6 +6,8 @@ import {
   contarJogosEVitorias,
   montarTabelaMotivos,
   calcularResumoExtra,
+  calcularMvpEPontuador,
+  ordenarLinhas,
   type LinhaMotivo,
   type PartidaComData,
   type EscalacaoParaJogos,
@@ -176,9 +178,7 @@ export function EstatisticasRachaPage() {
   // mesmo critério de MVP/Pontuador calculado dentro de TabelaMotivos: MVP =
   // maior saldo (Total - Erros), Pontuador = maior Total bruto — independente
   // da ordenação da tela
-  const jogadoresDeVerdade = motivos.filter((l) => l.nome !== 'Sem autor')
-  const mvpNome = [...jogadoresDeVerdade].sort((a, b) => b.total - b.erros - (a.total - a.erros))[0]?.nome
-  const pontuadorNome = [...jogadoresDeVerdade].sort((a, b) => b.total - a.total)[0]?.nome
+  const { mvpNome, pontuadorNome } = calcularMvpEPontuador(motivos)
 
   async function handleExportarClassificacao() {
     setExportandoClass(true)
@@ -197,12 +197,10 @@ export function EstatisticasRachaPage() {
   async function handleExportarTudo() {
     setExportandoTudo(true)
     try {
-      // "Sem autor" não é jogador de verdade — fica sempre por último, mesma
-      // regra do TabelaMotivos (que aqui não se aplica automático porque
-      // estamos usando o array cru, não o componente)
-      const motivosOrdenados = [...motivos].sort(
-        (a, b) => Number(a.nome === 'Sem autor') - Number(b.nome === 'Sem autor'),
-      )
+      // mesma regra do TabelaMotivos (que aqui não se aplica automático porque
+      // estamos usando o array cru, não o componente): ordena por Saldo e
+      // "Sem autor" sempre por último. Exporta na visão Total.
+      const motivosOrdenados = ordenarLinhas(motivos, 'saldo', false, 'total')
       const blob = await gerarImagemCombinada(classificacao, motivosOrdenados, mvpNome, pontuadorNome)
       const resultado = await compartilharImagem(blob, 'estatisticas-completas.png')
       if (resultado.baixado) {

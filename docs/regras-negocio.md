@@ -57,7 +57,9 @@ Times (`times`) pertencem a um racha e nunca são fixos entre rachas diferentes.
 - O placar é registrado de forma granular: cada ponto/gol é um evento próprio (`eventos_ponto`), não apenas um número final.
 - **Autoria do ponto/gol é opcional**:
   - Futebol: o gol normalmente tem um autor. Em caso de gol contra, o evento pode ficar sem autor. Marcar o gol pode opcionalmente registrar uma **assistência** (um companheiro de time, ou "sem assistência").
-  - Vôlei: pontos podem não ter autor ("Sem autor" — quando não dá pra saber ou não quer parar o jogo pra apontar). Cada evento pode registrar um **motivo**: `pinga`, `lob`, `corte`, `bloqueio`, `saque` ou `outro`. Existe também `erro_adversario`: quando um jogador do time que **perdeu** o ponto errou (ex.: saque pra fora) — o `jogador_id` do evento é de quem errou, mas o `time_id` é do time que **ganhou** o ponto. Erro não conta como ponto marcado por quem errou: fica numa coluna "Erros" separada do Total e de fora do cálculo de MVP.
+  - Vôlei: pontos podem não ter autor ("Sem autor" — quando não dá pra saber ou não quer parar o jogo pra apontar). Cada evento pode registrar um **motivo**: `pinga`, `lob`, `corte`, `bloqueio`, `saque` ou `outro`. Existe também `erro_adversario`: quando um jogador do time que **perdeu** o ponto errou (ex.: saque pra fora) — o `jogador_id` do evento é de quem errou, mas o `time_id` é do time que **ganhou** o ponto. Erro não conta como ponto marcado por quem errou: fica numa coluna "Erros" separada do Total, e entra no Saldo (Total − Erros), que define o MVP.
+  - **Marcar erro abre um painel embaixo do jogador** (igual ao do ponto) pra escolher o **tipo do erro** (`eventos_ponto.tipo_erro`): `saque` (na rede ou fora), `ataque_fora`, `ataque_rede`, `passe` (recepção ou levantamento que sai ou morre sem o adversário atacar), `toque_rede` (inclui invasão), `conducao` (dois toques, carregada) e `outro`. `tipo_erro` é nulo em erros sem tipo informado.
+  - **Regra pra decidir o que é erro: só marque erro quando o adversário não fez nada pra ganhar o ponto.** Se ele atacou, bloqueou ou sacou ace, o ponto é dele, com o motivo próprio (`corte`/`pinga`/`lob`, `bloqueio`, `saque`) — por isso defesa que falha contra ataque, e recepção que falha contra saque forte, não são erro.
 - Vôlei possui a camada extra de **sets**: cada set tem seu próprio placar, e a partida é decidida pelo número de sets vencidos por cada time.
 - Futebol tem **cronômetro** persistido no banco (não é só um timer local): pode ser iniciado/pausado/zerado, sincroniza entre dispositivos vendo a mesma partida ao vivo, e não encerra sozinho ao bater o tempo configurado (só sinaliza "acréscimos") — quem encerra é o organizador.
 - Futebol permite registrar **cartões** (amarelo/vermelho) por jogador — é um registro avulso, não afeta placar nem escalação, só estatística.
@@ -85,6 +87,9 @@ Quando times empatam em pontos na classificação, o desempate segue esta ordem:
 
 - Por racha e por grupo (acumulado entre rachas da mesma modalidade), e por jogador individual.
 - Tabela de pontos por motivo (vôlei): quantos pontos cada jogador fez de pinga/lob/corte/bloqueio/saque/outro, mais quantos jogos disputou e quantos erros cometeu (coluna própria, fora do Total). Pontos sem autor ficam agrupados numa linha "Sem autor" fixada por último.
+  - Ordem das colunas: Jogador, Jogos, Vitórias, motivos, Total, Erros, **Saldo**. O Saldo (Total − Erros) é sempre a última coluna e é o que ordena a tabela por padrão (desempate por Total, depois por nome). Clicar noutro cabeçalho muda a ordenação.
+  - Os erros aparecem agregados num só valor, qualquer que seja o tipo — o tipo fica gravado no banco, mas não é aberto na tabela.
+  - Seletor **Total | Média por jogo** (só onde a tabela mostra Jogos): na média, motivos, Total, Erros e Saldo viram valor ÷ jogos (1 casa decimal) e Vitórias vira Aproveitamento (vitórias ÷ jogos, em %). "Sem autor" e jogador sem jogo mostram "-". Jogador com menos de 3 jogos aparece esmaecido na média, porque a média engana com amostra pequena. A exportação de imagem segue a visão da tela.
 
 ## 10. Resumo das Entidades
 

@@ -1,15 +1,24 @@
 import { useState } from 'react'
-import { COLUNAS_MOTIVO, LABEL_MOTIVO, type LinhaMotivo } from '../lib/estatisticas'
+import {
+  COLUNAS_MOTIVO,
+  MIN_JOGOS_MEDIA,
+  SEM_AUTOR,
+  calcularMvpEPontuador,
+  formatarValorColuna,
+  labelColuna,
+  ordenarLinhas,
+  valorColuna,
+  type ColunaTabela,
+  type LinhaMotivo,
+  type VisaoTabela,
+} from '../lib/estatisticas'
 import { compartilharImagem, gerarImagemTabelaMotivos } from '../lib/exportarImagem'
-
-type Coluna = 'nome' | 'jogos' | 'vitorias' | 'erros' | 'total' | 'saldo' | (typeof COLUNAS_MOTIVO)[number]
 
 export function TabelaMotivos({
   linhas,
   mostrarJogador = true,
   mostrarJogos = true,
   mostrarVitorias = true,
-  mostrarErros = true,
   mostrarMvp = false,
   mostrarExportar = false,
   aoClicarJogador,
@@ -19,14 +28,15 @@ export function TabelaMotivos({
   mostrarJogador?: boolean
   mostrarJogos?: boolean
   mostrarVitorias?: boolean
-  mostrarErros?: boolean
   mostrarMvp?: boolean
   mostrarExportar?: boolean
   aoClicarJogador?: (nome: string) => void
   jogadorSelecionado?: string | null
 }) {
-  const [ordenarPor, setOrdenarPor] = useState<Coluna>('total')
+  // a última coluna é sempre o Saldo e é ela que ordena por padrão
+  const [ordenarPor, setOrdenarPor] = useState<ColunaTabela>('saldo')
   const [ordemAsc, setOrdemAsc] = useState(false)
+  const [visao, setVisao] = useState<VisaoTabela>('total')
   const [exportando, setExportando] = useState(false)
   const [baixado, setBaixado] = useState(false)
 
@@ -34,17 +44,12 @@ export function TabelaMotivos({
     return <p className="text-sm text-neutral-500">Nenhum ponto registrado ainda.</p>
   }
 
-  function valorDaColuna(linha: LinhaMotivo, coluna: Coluna) {
-    if (coluna === 'nome') return linha.nome
-    if (coluna === 'jogos') return linha.jogos
-    if (coluna === 'vitorias') return linha.vitorias
-    if (coluna === 'erros') return linha.erros
-    if (coluna === 'total') return linha.total
-    if (coluna === 'saldo') return linha.total - linha.erros
-    return linha.porMotivo[coluna] ?? 0
-  }
+  // média por jogo só faz sentido onde a tabela mostra a coluna de jogos
+  // (súmula de uma partida e tela do jogador não têm "por jogo")
+  const permiteVisao = mostrarJogos
+  const visaoAtiva: VisaoTabela = permiteVisao ? visao : 'total'
 
-  function alternarOrdenacao(coluna: Coluna) {
+  function alternarOrdenacao(coluna: ColunaTabela) {
     if (ordenarPor === coluna) {
       setOrdemAsc((asc) => !asc)
     } else {
@@ -53,33 +58,17 @@ export function TabelaMotivos({
     }
   }
 
-  // MVP = maior saldo (Total - Erros) entre jogadores de verdade — contribuição
-  // líquida, não só quem pontuou mais. Pontuador = maior Total bruto, à parte
-  // (pode ser um jogador diferente do MVP se ele também errou bastante).
-  // Nenhum dos dois depende da ordenação atual da tabela.
-  const jogadoresDeVerdade = mostrarMvp ? linhas.filter((l) => l.nome !== 'Sem autor') : []
-  const mvpNome = mostrarMvp
-    ? [...jogadoresDeVerdade].sort((a, b) => b.total - b.erros - (a.total - a.erros))[0]?.nome
-    : undefined
-  const pontuadorNome = mostrarMvp
-    ? [...jogadoresDeVerdade].sort((a, b) => b.total - a.total)[0]?.nome
-    : undefined
+  const { mvpNome, pontuadorNome } = mostrarMvp
+    ? calcularMvpEPontuador(linhas)
+    : { mvpNome: undefined, pontuadorNome: undefined }
 
-  // "Sem autor" não representa um jogador de verdade — fica sempre no fim, fora da ordenação
-  const linhasOrdenadas = [...linhas]
-    .sort((a, b) => {
-      const va = valorDaColuna(a, ordenarPor)
-      const vb = valorDaColuna(b, ordenarPor)
-      const cmp = typeof va === 'string' ? va.localeCompare(vb as string) : (va as number) - (vb as number)
-      return ordemAsc ? cmp : -cmp
-    })
-    .sort((a, b) => Number(a.nome === 'Sem autor') - Number(b.nome === 'Sem autor'))
+  const linhasOrdenadas = ordenarLinhas(linhas, ordenarPor, ordemAsc, visaoAtiva)
 
   async function handleExportar() {
     setExportando(true)
     try {
-      // mesma ordem que a pessoa tá vendo na tela, incluindo a ordenação que ela escolheu
-      const blob = await gerarImagemTabelaMotivos(linhasOrdenadas, mvpNome, pontuadorNome)
+      // mesma ordem e mesma visão que a pessoa tá vendo na tela
+      const blob = await gerarImagemTabelaMotivos(linhasOrdenadas, mvpNome, pontuadorNome, visaoAtiva)
       const resultado = await compartilharImagem(blob, 'estatisticas.png')
       if (resultado.baixado) {
         setBaixado(true)
@@ -90,7 +79,7 @@ export function TabelaMotivos({
     }
   }
 
-  function Cabecalho({ coluna, label }: { coluna: Coluna; label: string }) {
+  function Cabecalho({ coluna }: { coluna: ColunaTabela }) {
     return (
       <th className="px-2 py-2">
         <button
@@ -98,25 +87,58 @@ export function TabelaMotivos({
           onClick={() => alternarOrdenacao(coluna)}
           className="flex w-full items-center justify-center gap-1 hover:text-neutral-200"
         >
-          {label}
+          {labelColuna(coluna, visaoAtiva)}
           {ordenarPor === coluna && <span className="text-xs">{ordemAsc ? '▲' : '▼'}</span>}
         </button>
       </th>
     )
   }
 
+  function Celula({ linha, coluna, forte = false }: { linha: LinhaMotivo; coluna: ColunaTabela; forte?: boolean }) {
+    return (
+      <td className={`px-2 py-2 text-center ${forte ? 'font-medium' : ''}`}>
+        {formatarValorColuna(valorColuna(linha, coluna, visaoAtiva), coluna, visaoAtiva)}
+      </td>
+    )
+  }
+
   return (
     <div className="space-y-2">
-      {mostrarExportar && (
-        <div className="flex justify-end">
-          <button
-            type="button"
-            onClick={handleExportar}
-            disabled={exportando}
-            className="rounded-lg border border-neutral-700 px-3 py-1 text-xs text-neutral-300 hover:border-neutral-600 disabled:opacity-50"
-          >
-            {exportando ? 'Gerando...' : baixado ? 'Baixado!' : 'Exportar imagem'}
-          </button>
+      {(permiteVisao || mostrarExportar) && (
+        <div className="flex items-center justify-between gap-2">
+          {permiteVisao ? (
+            <div className="flex rounded-lg border border-neutral-700 p-0.5 text-xs">
+              {(
+                [
+                  ['total', 'Total'],
+                  ['porJogo', 'Média por jogo'],
+                ] as const
+              ).map(([valor, label]) => (
+                <button
+                  key={valor}
+                  type="button"
+                  onClick={() => setVisao(valor)}
+                  className={`rounded-md px-2 py-1 ${
+                    visaoAtiva === valor ? 'bg-neutral-700 text-neutral-100' : 'text-neutral-400 hover:text-neutral-200'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <span />
+          )}
+          {mostrarExportar && (
+            <button
+              type="button"
+              onClick={handleExportar}
+              disabled={exportando}
+              className="rounded-lg border border-neutral-700 px-3 py-1 text-xs text-neutral-300 hover:border-neutral-600 disabled:opacity-50"
+            >
+              {exportando ? 'Gerando...' : baixado ? 'Baixado!' : 'Exportar imagem'}
+            </button>
+          )}
         </div>
       )}
 
@@ -124,66 +146,64 @@ export function TabelaMotivos({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-neutral-800 text-neutral-500">
-              {mostrarJogador && <Cabecalho coluna="nome" label="Jogador" />}
-              {mostrarJogos && <Cabecalho coluna="jogos" label="Jogos" />}
-              {mostrarVitorias && <Cabecalho coluna="vitorias" label="Vitórias" />}
+              {mostrarJogador && <Cabecalho coluna="nome" />}
+              {mostrarJogos && <Cabecalho coluna="jogos" />}
+              {mostrarVitorias && <Cabecalho coluna="vitorias" />}
               {COLUNAS_MOTIVO.map((m) => (
-                <Cabecalho key={m} coluna={m} label={LABEL_MOTIVO[m]} />
+                <Cabecalho key={m} coluna={m} />
               ))}
-              {mostrarErros && <Cabecalho coluna="erros" label="Erros" />}
-              {mostrarErros && <Cabecalho coluna="saldo" label="Saldo" />}
-              <Cabecalho coluna="total" label="Total" />
+              <Cabecalho coluna="total" />
+              <Cabecalho coluna="erros" />
+              <Cabecalho coluna="saldo" />
             </tr>
           </thead>
           <tbody>
-            {linhasOrdenadas.map((linha) => (
-              <tr
-                key={linha.nome}
-                className={`border-b border-neutral-800 last:border-0 ${linha.nome === jogadorSelecionado ? 'bg-neutral-800/60' : ''}`}
-              >
-                {mostrarJogador && (
-                  <td className="whitespace-nowrap px-2 py-2 text-left">
-                    {aoClicarJogador && linha.nome !== 'Sem autor' ? (
-                      <button
-                        type="button"
-                        onClick={() => aoClicarJogador(linha.nome)}
-                        className="text-left text-neutral-100 hover:text-emerald-400"
-                      >
-                        {linha.nome}
-                      </button>
-                    ) : (
-                      linha.nome
-                    )}
-                    {linha.nome === mvpNome && (
-                      <span className="ml-1 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-400">
-                        MVP
-                      </span>
-                    )}
-                    {linha.nome === pontuadorNome && linha.nome !== mvpNome && (
-                      <span className="ml-1 rounded-full bg-sky-500/15 px-1.5 py-0.5 text-xs text-sky-400">
-                        TOP
-                      </span>
-                    )}
-                  </td>
-                )}
-                {mostrarJogos && <td className="px-2 py-2 text-center">{linha.jogos}</td>}
-                {mostrarVitorias && (
-                  <td className="px-2 py-2 text-center">{linha.nome === 'Sem autor' ? '-' : linha.vitorias}</td>
-                )}
-                {COLUNAS_MOTIVO.map((m) => (
-                  <td key={m} className="px-2 py-2 text-center">
-                    {linha.porMotivo[m] ?? 0}
-                  </td>
-                ))}
-                {mostrarErros && (
-                  <td className="px-2 py-2 text-center">{linha.nome === 'Sem autor' ? '-' : linha.erros}</td>
-                )}
-                {mostrarErros && (
-                  <td className="px-2 py-2 text-center">{linha.total - linha.erros}</td>
-                )}
-                <td className="px-2 py-2 text-center font-medium">{linha.total}</td>
-              </tr>
-            ))}
+            {linhasOrdenadas.map((linha) => {
+              // poucos jogos: média pouco confiável, esmaece
+              const poucosJogos = visaoAtiva === 'porJogo' && linha.nome !== SEM_AUTOR && linha.jogos < MIN_JOGOS_MEDIA
+
+              return (
+                <tr
+                  key={linha.nome}
+                  title={poucosJogos ? `Menos de ${MIN_JOGOS_MEDIA} jogos — média pouco confiável` : undefined}
+                  className={`border-b border-neutral-800 last:border-0 ${linha.nome === jogadorSelecionado ? 'bg-neutral-800/60' : ''} ${poucosJogos ? 'opacity-50' : ''}`}
+                >
+                  {mostrarJogador && (
+                    <td className="whitespace-nowrap px-2 py-2 text-left">
+                      {aoClicarJogador && linha.nome !== SEM_AUTOR ? (
+                        <button
+                          type="button"
+                          onClick={() => aoClicarJogador(linha.nome)}
+                          className="text-left text-neutral-100 hover:text-emerald-400"
+                        >
+                          {linha.nome}
+                        </button>
+                      ) : (
+                        linha.nome
+                      )}
+                      {linha.nome === mvpNome && (
+                        <span className="ml-1 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-400">
+                          MVP
+                        </span>
+                      )}
+                      {linha.nome === pontuadorNome && linha.nome !== mvpNome && (
+                        <span className="ml-1 rounded-full bg-sky-500/15 px-1.5 py-0.5 text-xs text-sky-400">
+                          TOP
+                        </span>
+                      )}
+                    </td>
+                  )}
+                  {mostrarJogos && <Celula linha={linha} coluna="jogos" />}
+                  {mostrarVitorias && <Celula linha={linha} coluna="vitorias" />}
+                  {COLUNAS_MOTIVO.map((m) => (
+                    <Celula key={m} linha={linha} coluna={m} />
+                  ))}
+                  <Celula linha={linha} coluna="total" />
+                  <Celula linha={linha} coluna="erros" />
+                  <Celula linha={linha} coluna="saldo" forte />
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>

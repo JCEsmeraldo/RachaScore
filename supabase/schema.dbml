@@ -107,6 +107,7 @@ Table eventos_ponto {
   jogador_id uuid [note: 'opcional - nem todo ponto tem autor. Em erro_adversario, é quem ERROU (time_id continua sendo de quem ganhou o ponto)']
   assistencia_jogador_id uuid [note: 'opcional, só futebol']
   motivo motivo_enum
+  tipo_erro tipo_erro_enum [note: 'só quando motivo = erro_adversario; null = erro sem tipo informado']
   created_at timestamptz [not null, default: `now()`]
 }
 
@@ -184,6 +185,16 @@ enum motivo_enum {
   bloqueio
   saque
   erro_adversario
+  outro
+}
+
+enum tipo_erro_enum {
+  saque
+  ataque_fora
+  ataque_rede
+  passe
+  toque_rede
+  conducao
   outro
 }
 

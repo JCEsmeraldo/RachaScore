@@ -93,7 +93,12 @@ export type SetPartida = {
 
 export type MotivoPonto = 'pinga' | 'lob' | 'corte' | 'bloqueio' | 'saque' | 'erro_adversario' | 'outro'
 
-export type TipoCartao = 'amarelo' | 'vermelho'
+// tipo do erro (só quando motivo = 'erro_adversario'). Null = erro sem tipo
+// informado. Erro só vale quando o adversário não fez nada pra ganhar o ponto —
+// se ele atacou, bloqueou ou sacou ace, o ponto é dele, com o motivo próprio.
+export type TipoErro = 'saque' | 'ataque_fora' | 'ataque_rede' | 'passe' | 'toque_rede' | 'conducao' | 'outro'
+
+export type TipoCartao ='amarelo' | 'vermelho'
 
 export type Cartao = {
   id: string

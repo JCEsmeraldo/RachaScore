@@ -1,4 +1,12 @@
-import { COLUNAS_MOTIVO, LABEL_MOTIVO, type LinhaMotivo } from './estatisticas'
+import {
+  COLUNAS_MOTIVO,
+  formatarValorColuna,
+  labelColuna,
+  valorColuna,
+  type ColunaTabela,
+  type LinhaMotivo,
+  type VisaoTabela,
+} from './estatisticas'
 import type { ClassificacaoTime } from './types'
 
 const COR_FUNDO = '#0a0a0a'
@@ -128,16 +136,21 @@ function desenharTabela(
   return ALTURA_CABECALHO + linhasTexto.length * ALTURA_LINHA
 }
 
-function linhasMotivosParaTexto(linhas: LinhaMotivo[], mvpNome?: string, pontuadorNome?: string) {
-  const colunas = ['Jogador', 'Jogos', 'Vitórias', ...COLUNAS_MOTIVO.map((m) => LABEL_MOTIVO[m]), 'Erros', 'Saldo', 'Total']
+function linhasMotivosParaTexto(
+  linhas: LinhaMotivo[],
+  mvpNome?: string,
+  pontuadorNome?: string,
+  visao: VisaoTabela = 'total',
+) {
+  // mesma ordem da tela: o Saldo é sempre a última coluna
+  const ordem: ColunaTabela[] = ['jogos', 'vitorias', ...COLUNAS_MOTIVO, 'total', 'erros', 'saldo']
+  const colunas = [
+    visao === 'porJogo' ? 'Jogador · média por jogo' : 'Jogador',
+    ...ordem.map((c) => labelColuna(c, visao)),
+  ]
   const linhasTexto = linhas.map((l) => [
     l.nome,
-    String(l.jogos),
-    l.nome === 'Sem autor' ? '-' : String(l.vitorias),
-    ...COLUNAS_MOTIVO.map((m) => String(l.porMotivo[m] ?? 0)),
-    l.nome === 'Sem autor' ? '-' : String(l.erros),
-    String(l.total - l.erros),
-    String(l.total),
+    ...ordem.map((c) => formatarValorColuna(valorColuna(l, c, visao), c, visao)),
   ])
   return { colunas, linhasTexto, nomesLinha: linhas.map((l) => l.nome), comBadges: !!mvpNome || !!pontuadorNome }
 }
@@ -169,8 +182,14 @@ export async function gerarImagemTabelaMotivos(
   linhas: LinhaMotivo[],
   mvpNome?: string,
   pontuadorNome?: string,
+  visao: VisaoTabela = 'total',
 ): Promise<Blob> {
-  const { colunas, linhasTexto, nomesLinha, comBadges } = linhasMotivosParaTexto(linhas, mvpNome, pontuadorNome)
+  const { colunas, linhasTexto, nomesLinha, comBadges } = linhasMotivosParaTexto(
+    linhas,
+    mvpNome,
+    pontuadorNome,
+    visao,
+  )
   const largurasColuna = calcularLargurasColuna(colunas, linhasTexto, comBadges)
   const larguraTotal = largurasColuna.reduce((a, b) => a + b, 0)
   const alturaTabela = ALTURA_CABECALHO + linhasTexto.length * ALTURA_LINHA

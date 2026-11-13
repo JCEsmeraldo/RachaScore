@@ -1,4 +1,14 @@
-import type { MotivoPonto } from './types'
+import type { MotivoPonto, TipoErro } from './types'
+
+export const TIPOS_ERRO: { valor: TipoErro; label: string }[] = [
+  { valor: 'saque', label: 'Saque' },
+  { valor: 'ataque_fora', label: 'Ataque fora' },
+  { valor: 'ataque_rede', label: 'Ataque na rede' },
+  { valor: 'passe', label: 'Passe' },
+  { valor: 'toque_rede', label: 'Toque na rede' },
+  { valor: 'conducao', label: 'Condução' },
+  { valor: 'outro', label: 'Outro' },
+]
 
 export const LABEL_MOTIVO: Record<MotivoPonto, string> = {
   pinga: 'Pinga',
@@ -11,6 +21,105 @@ export const LABEL_MOTIVO: Record<MotivoPonto, string> = {
 }
 
 export const COLUNAS_MOTIVO: MotivoPonto[] = ['pinga', 'lob', 'corte', 'bloqueio', 'saque', 'outro']
+
+export type VisaoTabela = 'total' | 'porJogo'
+
+// abaixo disso a média por jogo engana (1 jogo com 5 pontos = 5,0) — a linha
+// aparece esmaecida na visão por jogo
+export const MIN_JOGOS_MEDIA = 3
+
+export type ColunaTabela = 'nome' | 'jogos' | 'vitorias' | 'erros' | 'total' | 'saldo' | (typeof COLUNAS_MOTIVO)[number]
+
+export const SEM_AUTOR = 'Sem autor'
+
+// valor de uma coluna numa visão. null = não se aplica (mostra "-"): "Sem autor"
+// não é jogador (sem vitórias/erros, sem média) e jogador sem jogo não tem média
+export function valorColuna(linha: LinhaMotivo, coluna: ColunaTabela, visao: VisaoTabela): string | number | null {
+  if (coluna === 'nome') return linha.nome
+  if (coluna === 'jogos') return linha.jogos
+
+  const semAutor = linha.nome === SEM_AUTOR
+
+  if (coluna === 'vitorias') {
+    if (semAutor) return null
+    if (visao === 'total') return linha.vitorias
+    return linha.jogos > 0 ? (linha.vitorias / linha.jogos) * 100 : null // aproveitamento %
+  }
+
+  if (coluna === 'erros' && semAutor && visao === 'total') return null
+
+  const bruto =
+    coluna === 'erros'
+      ? linha.erros
+      : coluna === 'total'
+        ? linha.total
+        : coluna === 'saldo'
+          ? linha.total - linha.erros
+          : (linha.porMotivo[coluna] ?? 0)
+
+  if (visao === 'total') return bruto
+  if (semAutor || linha.jogos === 0) return null
+  return bruto / linha.jogos
+}
+
+export function formatarValorColuna(valor: string | number | null, coluna: ColunaTabela, visao: VisaoTabela): string {
+  if (valor === null) return '-'
+  if (typeof valor === 'string') return valor
+  if (visao === 'total') return String(valor)
+  return coluna === 'vitorias' ? `${Math.round(valor)}%` : valor.toFixed(1)
+}
+
+export function labelColuna(coluna: ColunaTabela, visao: VisaoTabela): string {
+  if (coluna === 'nome') return 'Jogador'
+  if (coluna === 'jogos') return 'Jogos'
+  if (coluna === 'vitorias') return visao === 'porJogo' ? 'Aproveitamento' : 'Vitórias'
+  if (coluna === 'erros') return 'Erros'
+  if (coluna === 'total') return 'Total'
+  if (coluna === 'saldo') return 'Saldo'
+  return LABEL_MOTIVO[coluna]
+}
+
+// "Sem autor" sempre por último (fora da ordenação); valor null vai pro fim da
+// coluna; empate desempata por Total (maior primeiro) e depois por nome, pra
+// ordem não pular de lugar entre renders
+export function ordenarLinhas(
+  linhas: LinhaMotivo[],
+  coluna: ColunaTabela,
+  asc: boolean,
+  visao: VisaoTabela,
+): LinhaMotivo[] {
+  return [...linhas].sort((a, b) => {
+    const semAutorA = a.nome === SEM_AUTOR
+    const semAutorB = b.nome === SEM_AUTOR
+    if (semAutorA !== semAutorB) return semAutorA ? 1 : -1
+
+    const va = valorColuna(a, coluna, visao)
+    const vb = valorColuna(b, coluna, visao)
+    if (va === null && vb !== null) return 1
+    if (vb === null && va !== null) return -1
+
+    if (va !== null && vb !== null && va !== vb) {
+      const cmp = typeof va === 'string' ? va.localeCompare(vb as string) : (va as number) - (vb as number)
+      return asc ? cmp : -cmp
+    }
+
+    const ta = a.total
+    const tb = b.total
+    if (ta !== tb) return tb - ta
+    return a.nome.localeCompare(b.nome)
+  })
+}
+
+// MVP = maior saldo (Total - Erros) entre jogadores de verdade — contribuição
+// líquida, não só quem pontuou mais. Pontuador = maior Total bruto, à parte
+// (pode ser outro jogador, se o MVP errou bastante). Independem da ordenação.
+export function calcularMvpEPontuador(linhas: LinhaMotivo[]): { mvpNome?: string; pontuadorNome?: string } {
+  const jogadores = linhas.filter((l) => l.nome !== SEM_AUTOR)
+  return {
+    mvpNome: [...jogadores].sort((a, b) => b.total - b.erros - (a.total - a.erros))[0]?.nome,
+    pontuadorNome: [...jogadores].sort((a, b) => b.total - a.total)[0]?.nome,
+  }
+}
 
 export type LinhaMotivo = {
   nome: string
